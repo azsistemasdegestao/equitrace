@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions     Transaction[]
+  portfolioHistory PortfolioHistory[]
+}
+
+model Transaction {
+  id        String          @id @default(cuid())
+  userId    String
+  ticker    String
+  type      TransactionType
+  quantity  Decimal
+  price     Decimal
+  date      DateTime
+  createdAt DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model PortfolioHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  totalValue  Decimal
+  snapshotAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum TransactionType {
+  BUY
+  SELL
+}
