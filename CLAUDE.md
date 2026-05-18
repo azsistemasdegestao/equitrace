@@ -18,6 +18,10 @@ npx prisma studio             # GUI for the database
 tsx prisma/seed.ts            # seed admin user (admin@wallet.com / admin123)
 ```
 
+## Development Workflow
+
+Before implementing any solution, always query Context7 (`mcp__context7`) for up-to-date best practices and API docs for the relevant library or framework (Next.js, Prisma, Auth.js, Recharts, etc.). Do not rely solely on training data — library APIs change across versions.
+
 ## Architecture
 
 ### Request Flow
