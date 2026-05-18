@@ -32,7 +32,8 @@ tsx prisma/seed.ts            # seed admin user (admin@wallet.com / admin123)
 - **Prisma 7 + PostgreSQL**: requires `@prisma/adapter-pg` and `PrismaPg` adapter (not the legacy direct connection). The singleton is in `src/lib/prisma.ts`.
 - **PM (average cost) calculation**: computed at runtime from full transaction history in `src/lib/portfolio.ts`. SELL reduces quantity but does not change the average cost of remaining shares.
 - **Portfolio history**: lazy daily snapshot — triggered on the first dashboard request each day, stored in `PortfolioHistory`. No cron, no historical quotes.
-- **Finnhub quotes**: fetched in `src/lib/finnhub.ts`, polled every 5 minutes client-side. API key via `FINNHUB_API_KEY` env var. Free tier — avoid unnecessary calls.
+- **Finnhub quotes**: fetched in `src/lib/finnhub.ts`, polled every 5 minutes client-side via `/api/quotes`. API key via `FINNHUB_API_KEY` env var. Free tier — avoid unnecessary calls.
+- **Recharts + SSR**: Recharts uses browser APIs that fail during SSR. Use a `mounted` state (`useState(false)` + `useEffect(() => setMounted(true), [])`) and only render charts after mount.
 
 ### Data Models
 
@@ -41,6 +42,46 @@ Three models: `User` (with `role: ADMIN | USER`), `Transaction` (BUY/SELL per ti
 ### Rendering Strategy
 
 Server Components by default. Use `"use client"` only for forms, charts (Recharts), and interactive UI.
+
+## File Structure
+
+```
+src/
+  app/
+    api/
+      auth/[...nextauth]/route.ts   # Auth.js handlers
+      quotes/route.ts               # GET /api/quotes?tickers=AAPL,MSFT — Finnhub proxy
+      transactions/route.ts         # GET + POST /api/transactions
+    dashboard/
+      layout.tsx                    # Auth check + Navbar
+      page.tsx                      # Portfolio page (server component)
+      transactions/page.tsx         # Transactions list + add modal
+      import/page.tsx               # TODO: CSV/Excel import
+      admin/page.tsx                # TODO: Admin — user management
+    login/page.tsx
+    layout.tsx
+    globals.css
+    page.tsx
+  components/
+    navbar.tsx                      # Sticky nav with tab links + sign out
+    portfolio-client.tsx            # Client: cards, pie chart, line chart, positions table, quote polling
+    providers.tsx                   # SessionProvider wrapper
+    transaction-modal.tsx           # Client: "Add Transaction" button + modal form
+  lib/
+    auth.ts                         # Auth.js v5 config
+    finnhub.ts                      # Finnhub client — getQuote/getQuotes with 5-min in-memory cache
+    portfolio.ts                    # computePositions(transactions) — PM calculation
+    prisma.ts                       # Prisma singleton
+  types/
+    next-auth.d.ts                  # Session type augmentation (id + role)
+  proxy.ts                          # Route protection middleware
+prisma/
+  schema.prisma
+  seed.ts
+  migrations/
+prisma.config.ts
+.env
+```
 
 ## Styling Rules
 

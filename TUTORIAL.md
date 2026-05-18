@@ -231,17 +231,34 @@ src/
     api/
       auth/
         [...nextauth]/
-          route.ts
+          route.ts              # Auth.js handlers (GET + POST)
+      quotes/
+        route.ts                # GET /api/quotes?tickers=AAPL,MSFT
+      transactions/
+        route.ts                # GET + POST /api/transactions
     dashboard/
-      page.tsx
+      layout.tsx                # Auth check + Navbar wrapper
+      page.tsx                  # Portfolio (server component)
+      transactions/
+        page.tsx                # Transactions list + add modal
+      import/
+        page.tsx                # TODO: CSV/Excel import
+      admin/
+        page.tsx                # TODO: Admin user management
     login/
       page.tsx
     layout.tsx
     globals.css
+    page.tsx
   components/
-    providers.tsx
+    navbar.tsx                  # Sticky top nav with tabs
+    portfolio-client.tsx        # Client: charts + table + quote polling
+    providers.tsx               # SessionProvider wrapper
+    transaction-modal.tsx       # Client: add transaction button + modal
   lib/
     auth.ts
+    finnhub.ts                  # Finnhub client with in-memory cache
+    portfolio.ts                # computePositions — PM calculation
     prisma.ts
   types/
     next-auth.d.ts
@@ -437,7 +454,68 @@ export const config = {
 
 ---
 
-## 10. Known Gotchas
+## 10. Key Libs Implemented
+
+### `src/lib/portfolio.ts` — PM (Average Cost) Calculation
+
+Processes transactions in chronological order per ticker:
+- **BUY**: `totalCost += qty * price`, `totalQty += qty`
+- **SELL**: PM stays the same — reduce qty and cost proportionally (`totalCost = pm * newQty`)
+
+```ts
+export function computePositions(transactions: TxInput[]): Position[] { ... }
+```
+
+### `src/lib/finnhub.ts` — Quote Fetching
+
+Fetches current price from `https://finnhub.io/api/v1/quote?symbol=X&token=KEY`.
+In-memory cache per symbol with 5-minute TTL (module-level Map — persists across requests in the same Node.js process).
+
+```ts
+export async function getQuote(symbol: string): Promise<number | null>
+export async function getQuotes(symbols: string[]): Promise<Record<string, number>>
+```
+
+### `src/app/api/quotes/route.ts` — Quotes Proxy
+
+Authenticated server-side proxy so the Finnhub API key never reaches the browser.
+
+```
+GET /api/quotes?tickers=AAPL,MSFT,VNQ
+→ { "AAPL": 213.45, "MSFT": 421.10, "VNQ": 87.23 }
+```
+
+### `src/app/api/transactions/route.ts`
+
+```
+GET  /api/transactions       → list for session user, sorted by date desc
+POST /api/transactions       → create transaction (userId always from session)
+```
+
+### Recharts + SSR Pattern
+
+Recharts uses `ResizeObserver` and other browser APIs that fail during server-side rendering.
+Fix: use a `mounted` flag in the client component and render charts only after hydration.
+
+```tsx
+const [mounted, setMounted] = useState(false);
+useEffect(() => setMounted(true), []);
+
+{mounted && <PieChart .../>}
+```
+
+### Portfolio History — Lazy Daily Snapshot
+
+Triggered in `src/app/dashboard/page.tsx` on every dashboard load:
+1. Compute current total value from positions × live quotes.
+2. Check if a `PortfolioHistory` record exists for today (UTC midnight).
+3. If not, create one.
+
+No cron job needed — the snapshot happens naturally on first visit each day.
+
+---
+
+## 11. Known Gotchas
 
 | Issue | Cause | Fix |
 |---|---|---|
