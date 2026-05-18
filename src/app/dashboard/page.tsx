@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { computePositions } from "@/lib/portfolio";
 import { getQuotes } from "@/lib/finnhub";
 import PortfolioClient from "@/components/portfolio-client";
+import TransactionModal from "@/components/transaction-modal";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -56,7 +57,10 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-white mb-1">Portfolio</h1>
+      <div className="flex items-start justify-between mb-1">
+        <h1 className="text-2xl font-bold text-white">Portfolio</h1>
+        <TransactionModal />
+      </div>
       <p className="text-zinc-400 text-sm mb-8">Welcome back, {session.user?.name}</p>
 
       <PortfolioClient
