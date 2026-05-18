@@ -502,6 +502,8 @@ Without protection, any user could navigate directly to `/dashboard` without log
 
 In Next.js, this is done with *middleware* — a function that runs before every request. In Next.js 16, the file must be named `proxy.ts` and the function must be named `proxy` (renamed from `middleware.ts`/`middleware`).
 
+> **Critical gotcha: never create `middleware.ts`.** If both `src/middleware.ts` and `src/proxy.ts` exist at the same time, Next.js 16 throws a fatal error and the entire app stops loading. Use `proxy.ts` only.
+
 **`src/proxy.ts`:**
 ```ts
 import { NextRequest, NextResponse } from "next/server";
@@ -540,6 +542,19 @@ export const config = {
 **The two redirect rules:**
 1. If the user tries to reach `/dashboard/*` without a token → redirect to `/login`.
 2. If a logged-in user tries to reach `/login` → redirect to `/dashboard` (they're already authenticated, no need to see the login form).
+
+### Root page redirect
+
+The root `/` page (`src/app/page.tsx`) checks the session server-side and redirects in a single hop:
+
+```ts
+export default async function Home() {
+  const session = await auth();
+  redirect(session ? "/dashboard" : "/login");
+}
+```
+
+Unauthenticated visitors go straight to `/login`. Authenticated visitors go straight to `/dashboard`. This replaces the default Next.js scaffold page.
 
 ---
 
@@ -776,6 +791,8 @@ useEffect(() => {
 ### The transaction modal
 
 The "Add Transaction" button and form live in `src/components/transaction-modal.tsx`. It is a client component (`"use client"`) because it manages local state (open/closed, form values, loading state).
+
+**Modal close behavior:** modals only close via their explicit Cancel/Close buttons. Clicking the dark backdrop behind the modal does nothing. This is intentional — accidental clicks outside the modal should not discard in-progress form input.
 
 The form submits to `POST /api/transactions`:
 
@@ -1094,6 +1111,7 @@ Collected from real problems encountered while building this project:
 | `next-auth@stable` (v4) incompatible | v4 does not support the App Router | Install `next-auth@beta` (v5) |
 | Middleware crashes with crypto error | Edge Runtime lacks Node.js `crypto` | Use `getToken` from `next-auth/jwt` (uses Web Crypto API) |
 | `middleware.ts` not picked up | Next.js 16 renamed the file | Use `proxy.ts` with `export async function proxy` |
+| App stops loading entirely | Both `middleware.ts` and `proxy.ts` exist simultaneously | Delete `middleware.ts` — only `proxy.ts` must exist |
 | `prisma generate` not run after migration | Prisma 7 removed auto-generate | Run `npx prisma generate` manually after schema changes |
 | Recharts crashes on server | Recharts uses browser-only APIs | Gate chart renders on `mounted` state (set in `useEffect`) |
 | Playwright tests fail on Ubuntu 26.04 | Ubuntu 26.04 not yet supported | Run `npx playwright test` from Windows PowerShell |

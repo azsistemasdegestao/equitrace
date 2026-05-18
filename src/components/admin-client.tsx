@@ -200,7 +200,6 @@ export default function AdminClient({ users, currentUserId }: Props) {
       {creating && (
         <div
           className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-          onClick={(e) => { if (e.target === e.currentTarget && !loading) setCreating(false); }}
         >
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-5">New User</h2>
@@ -280,7 +279,6 @@ export default function AdminClient({ users, currentUserId }: Props) {
       {resettingId && (
         <div
           className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
-          onClick={(e) => { if (e.target === e.currentTarget && !loading) { setResettingId(null); setNewPassword(""); } }}
         >
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-1">Reset Password</h2>

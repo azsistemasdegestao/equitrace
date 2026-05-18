@@ -36,7 +36,7 @@ Follow these steps for every implementation:
 
 ### Key Design Decisions
 
-- **Next.js 16 proxy file**: middleware is `src/proxy.ts` with `export async function proxy` — Next.js 16 renamed `middleware.ts` to `proxy.ts`.
+- **Next.js 16 proxy file**: middleware is `src/proxy.ts` with `export async function proxy` — Next.js 16 renamed `middleware.ts` to `proxy.ts`. **NEVER create or use `middleware.ts`** — having both files causes a fatal conflict and breaks the entire app (nothing loads). Only `proxy.ts` must exist.
 - **Prisma 7 + PostgreSQL**: requires `@prisma/adapter-pg` and `PrismaPg` adapter (not the legacy direct connection). The singleton is in `src/lib/prisma.ts`.
 - **PM (average cost) calculation**: computed at runtime from full transaction history in `src/lib/portfolio.ts`. SELL reduces quantity but does not change the average cost of remaining shares.
 - **Portfolio history**: lazy daily snapshot — triggered on the first dashboard request each day, stored in `PortfolioHistory`. No cron, no historical quotes.
@@ -78,7 +78,7 @@ src/
     login/page.tsx
     layout.tsx
     globals.css
-    page.tsx
+    page.tsx                          # Root page — checks auth, redirects to /dashboard (logged in) or /login (not logged in)
   components/
     navbar.tsx                      # Sticky nav with tab links + sign out
     portfolio-client.tsx            # Client: cards, pie chart, line chart, positions table, quote polling
