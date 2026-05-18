@@ -20,7 +20,11 @@ tsx prisma/seed.ts            # seed admin user (admin@wallet.com / admin123)
 
 ## Development Workflow
 
-Before implementing any solution, always query Context7 (`mcp__context7`) for up-to-date best practices and API docs for the relevant library or framework (Next.js, Prisma, Auth.js, Recharts, etc.). Do not rely solely on training data — library APIs change across versions.
+Follow these steps for every implementation:
+
+1. **Query Context7 first** — before writing any code, call `mcp__context7` to get up-to-date best practices and API docs for the relevant library or framework (Next.js, Prisma, Auth.js, Recharts, etc.). Do not rely solely on training data — library APIs change across versions.
+2. **Update `CLAUDE.md`** — after implementing, reflect every new file, route, component, and design decision in the File Structure and Key Design Decisions sections of this file.
+3. **Update `TUTORIAL.md`** — add or update the relevant section to document the feature: what was built, key files, how it works, and any gotchas encountered.
 
 ## Architecture
 
