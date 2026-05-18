@@ -38,6 +38,7 @@ Before implementing any solution, always query Context7 (`mcp__context7`) for up
 - **Portfolio history**: lazy daily snapshot — triggered on the first dashboard request each day, stored in `PortfolioHistory`. No cron, no historical quotes.
 - **Finnhub quotes**: fetched in `src/lib/finnhub.ts`, polled every 5 minutes client-side via `/api/quotes`. API key via `FINNHUB_API_KEY` env var. Free tier — avoid unnecessary calls.
 - **Recharts + SSR**: Recharts uses browser APIs that fail during SSR. Use a `mounted` state (`useState(false)` + `useEffect(() => setMounted(true), [])`) and only render charts after mount.
+- **Admin authorization**: both the page (`/dashboard/admin/page.tsx`) and every `/api/users` route check `session.user.role === "ADMIN"` — page redirects to `/dashboard`, API returns 403. Deleting a user requires manually deleting their `PortfolioHistory` and `Transaction` records first (no cascade in schema).
 - **CSV/Excel import**: `papaparse` parses CSV; `xlsx` parses Excel. Column names are case-insensitive. `DATA` uses MM/DD/YYYY format. `Operation` is normalized to uppercase BUY/SELL. `PRINCIPAL` and `BROKERAGE` columns are ignored. Rows missing required fields are returned in the `invalid` array with a reason string.
 
 ### Data Models
@@ -60,12 +61,15 @@ src/
       import/
         preview/route.ts            # POST /api/import/preview — parse CSV/Excel, return valid + invalid rows
         confirm/route.ts            # POST /api/import/confirm — bulk insert validated rows
+      users/
+        route.ts                    # POST /api/users — create user (ADMIN only)
+        [id]/route.ts               # DELETE /api/users/[id] — delete user; PATCH — reset password (ADMIN only)
     dashboard/
       layout.tsx                    # Auth check + Navbar
       page.tsx                      # Portfolio page (server component)
       transactions/page.tsx         # Transactions list + add modal
       import/page.tsx               # CSV/Excel import (shell — delegates to ImportClient)
-      admin/page.tsx                # TODO: Admin — user management
+      admin/page.tsx                # User management — ADMIN only; redirects non-admins to /dashboard
     login/page.tsx
     layout.tsx
     globals.css
@@ -76,6 +80,7 @@ src/
     providers.tsx                   # SessionProvider wrapper
     transaction-modal.tsx           # Client: "Add Transaction" button + modal form
     import-client.tsx               # Client: file upload, preview table, conflict warning, confirm button
+    admin-client.tsx                # Client: user table, create/delete/reset-password modals (ADMIN only)
   lib/
     auth.ts                         # Auth.js v5 config
     finnhub.ts                      # Finnhub client — getQuote/getQuotes with 5-min in-memory cache
