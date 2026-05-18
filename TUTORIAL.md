@@ -236,13 +236,18 @@ src/
         route.ts                # GET /api/quotes?tickers=AAPL,MSFT
       transactions/
         route.ts                # GET + POST /api/transactions
+      import/
+        preview/
+          route.ts              # POST /api/import/preview
+        confirm/
+          route.ts              # POST /api/import/confirm
     dashboard/
       layout.tsx                # Auth check + Navbar wrapper
       page.tsx                  # Portfolio (server component)
       transactions/
         page.tsx                # Transactions list + add modal
       import/
-        page.tsx                # TODO: CSV/Excel import
+        page.tsx                # CSV/Excel import
       admin/
         page.tsx                # TODO: Admin user management
     login/
@@ -255,6 +260,7 @@ src/
     portfolio-client.tsx        # Client: charts + table + quote polling
     providers.tsx               # SessionProvider wrapper
     transaction-modal.tsx       # Client: add transaction button + modal
+    import-client.tsx           # Client: file upload, preview, confirm import
   lib/
     auth.ts
     finnhub.ts                  # Finnhub client with in-memory cache
@@ -512,6 +518,24 @@ Triggered in `src/app/dashboard/page.tsx` on every dashboard load:
 3. If not, create one.
 
 No cron job needed — the snapshot happens naturally on first visit each day.
+
+### `POST /api/import/preview` and `POST /api/import/confirm`
+
+Two-step bulk import flow:
+
+1. **Preview** — client uploads a file via `multipart/form-data`. Server parses it (CSV with `papaparse`, Excel with `xlsx`), normalizes rows, and returns:
+   - `valid` — rows ready to insert
+   - `invalid` — rejected rows with reason strings
+   - `existingTickers` — tickers that already have transactions for this user (shown as a warning, not a blocker)
+
+2. **Confirm** — client sends the `valid` array as JSON. Server inserts all rows via `prisma.transaction.createMany`. `userId` always comes from the server-side session.
+
+**Expected file columns:** `DATA` (MM/DD/YYYY), `Operation` (buy/sell, any case), `SYM`, `QTY`, `PRICE`. Columns `PRINCIPAL` and `BROKERAGE` are ignored.
+
+```bash
+npm install papaparse xlsx
+npm install -D @types/papaparse
+```
 
 ---
 

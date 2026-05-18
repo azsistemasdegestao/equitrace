@@ -34,6 +34,7 @@ tsx prisma/seed.ts            # seed admin user (admin@wallet.com / admin123)
 - **Portfolio history**: lazy daily snapshot — triggered on the first dashboard request each day, stored in `PortfolioHistory`. No cron, no historical quotes.
 - **Finnhub quotes**: fetched in `src/lib/finnhub.ts`, polled every 5 minutes client-side via `/api/quotes`. API key via `FINNHUB_API_KEY` env var. Free tier — avoid unnecessary calls.
 - **Recharts + SSR**: Recharts uses browser APIs that fail during SSR. Use a `mounted` state (`useState(false)` + `useEffect(() => setMounted(true), [])`) and only render charts after mount.
+- **CSV/Excel import**: `papaparse` parses CSV; `xlsx` parses Excel. Column names are case-insensitive. `DATA` uses MM/DD/YYYY format. `Operation` is normalized to uppercase BUY/SELL. `PRINCIPAL` and `BROKERAGE` columns are ignored. Rows missing required fields are returned in the `invalid` array with a reason string.
 
 ### Data Models
 
@@ -52,11 +53,14 @@ src/
       auth/[...nextauth]/route.ts   # Auth.js handlers
       quotes/route.ts               # GET /api/quotes?tickers=AAPL,MSFT — Finnhub proxy
       transactions/route.ts         # GET + POST /api/transactions
+      import/
+        preview/route.ts            # POST /api/import/preview — parse CSV/Excel, return valid + invalid rows
+        confirm/route.ts            # POST /api/import/confirm — bulk insert validated rows
     dashboard/
       layout.tsx                    # Auth check + Navbar
       page.tsx                      # Portfolio page (server component)
       transactions/page.tsx         # Transactions list + add modal
-      import/page.tsx               # TODO: CSV/Excel import
+      import/page.tsx               # CSV/Excel import (shell — delegates to ImportClient)
       admin/page.tsx                # TODO: Admin — user management
     login/page.tsx
     layout.tsx
@@ -67,6 +71,7 @@ src/
     portfolio-client.tsx            # Client: cards, pie chart, line chart, positions table, quote polling
     providers.tsx                   # SessionProvider wrapper
     transaction-modal.tsx           # Client: "Add Transaction" button + modal form
+    import-client.tsx               # Client: file upload, preview table, conflict warning, confirm button
   lib/
     auth.ts                         # Auth.js v5 config
     finnhub.ts                      # Finnhub client — getQuote/getQuotes with 5-min in-memory cache
