@@ -43,11 +43,12 @@ Follow these steps for every implementation:
 - **Finnhub quotes**: fetched in `src/lib/finnhub.ts`, polled every 5 minutes client-side via `/api/quotes`. API key via `FINNHUB_API_KEY` env var. Free tier — avoid unnecessary calls.
 - **Recharts + SSR**: Recharts uses browser APIs that fail during SSR. Use a `mounted` state (`useState(false)` + `useEffect(() => setMounted(true), [])`) and only render charts after mount.
 - **Admin authorization**: both the page (`/dashboard/admin/page.tsx`) and every `/api/users` route check `session.user.role === "ADMIN"` — page redirects to `/dashboard`, API returns 403. Deleting a user requires manually deleting their `PortfolioHistory` and `Transaction` records first (no cascade in schema).
-- **CSV/Excel import**: `papaparse` parses CSV; `xlsx` parses Excel. Column names are case-insensitive. `DATA` uses MM/DD/YYYY format. `Operation` is normalized to uppercase BUY/SELL. `PRINCIPAL` and `BROKERAGE` columns are ignored. Rows missing required fields are returned in the `invalid` array with a reason string.
+- **Brokerage field**: `Transaction` has an optional `brokerage String?` column. The manual form includes an optional Brokerage input. The CSV import always sets `brokerage: null` (the `BROKERAGE` column in the file is ignored).
+- **CSV/Excel import**: `papaparse` parses CSV with `delimiter: ";"` (semicolon-separated); `xlsx` parses Excel. Expected columns: `DATA` (YYYY-MM-DD), `Type` (`buy`/`sale`, mapped to `BUY`/`SELL`), `Ticker`, `Quantity` (dot decimal), `Price (USD)` (dot decimal, comma thousands separator removed). `PRINCIPAL` and `BROKERAGE` columns are ignored. Rows missing required fields are returned in the `invalid` array with a reason string. A "Download sample file" button on the import page generates a valid sample CSV client-side via Blob URL.
 
 ### Data Models
 
-Three models: `User` (with `role: ADMIN | USER`), `Transaction` (BUY/SELL per ticker with `date` required), `PortfolioHistory` (daily total value snapshots).
+Three models: `User` (with `role: ADMIN | USER`), `Transaction` (BUY/SELL per ticker with `date` required and optional `brokerage`), `PortfolioHistory` (daily total value snapshots).
 
 ### Rendering Strategy
 

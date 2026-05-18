@@ -16,6 +16,7 @@ export default function TransactionModal() {
     quantity: "",
     price: "",
     date: today(),
+    brokerage: "",
   });
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
@@ -25,7 +26,7 @@ export default function TransactionModal() {
 
   function handleOpen() {
     setError("");
-    setForm({ ticker: "", type: "BUY", quantity: "", price: "", date: today() });
+    setForm({ ticker: "", type: "BUY", quantity: "", price: "", date: today(), brokerage: "" });
     setOpen(true);
   }
 
@@ -143,7 +144,20 @@ export default function TransactionModal() {
                   value={form.date}
                   onChange={handleChange}
                   required
+                  style={{ colorScheme: "dark" }}
                   className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600"
+                />
+              </div>
+
+              <div>
+                <label className="text-zinc-400 text-xs mb-1 block">Brokerage <span className="text-zinc-600">(optional)</span></label>
+                <input
+                  name="brokerage"
+                  value={form.brokerage}
+                  onChange={handleChange}
+                  maxLength={60}
+                  placeholder="e.g. Avenue, TD Ameritrade"
+                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
                 />
               </div>
 

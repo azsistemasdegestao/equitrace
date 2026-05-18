@@ -10,6 +10,7 @@ export interface ParsedRow {
   type: "BUY" | "SELL";
   quantity: number;
   price: number;
+  brokerage: string | null;
 }
 
 export interface InvalidRow {
@@ -18,14 +19,31 @@ export interface InvalidRow {
   reason: string;
 }
 
+// YYYY-MM-DD → ISO string.
 function parseDate(raw: string): string | null {
-  // MM/DD/YYYY
-  const match = String(raw ?? "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!match) return null;
-  const [, mm, dd, yyyy] = match;
-  const d = new Date(`${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}T12:00:00.000Z`);
-  if (isNaN(d.getTime())) return null;
-  return d.toISOString();
+  const dateString = String(raw ?? "").trim();
+  const parsed = new Date(dateString);
+  const isValid = !isNaN(parsed.getTime());
+  if (!isValid) return null;
+  return parsed.toISOString();
+}
+
+// "buy" → "BUY", "sale" → "SELL". Case-insensitive.
+function normalizeOperation(raw: string): "BUY" | "SELL" | null {
+  const upper = String(raw).toUpperCase().trim();
+  if (upper === "BUY") return "BUY";
+  if (upper === "SELL" || upper === "SALE") return "SELL";
+  return null;
+}
+
+// Dot decimal, comma thousands: "2,670.95" → 2670.95
+function parsePrice(raw: string): number {
+  return parseFloat(String(raw).trim().replace(/,/g, ""));
+}
+
+// Standard dot decimal: "2.00", "1.71" → parse directly
+function parseQuantity(raw: string): number {
+  return parseFloat(String(raw).trim());
 }
 
 function parseRows(records: Record<string, string>[]) {
@@ -37,10 +55,10 @@ function parseRows(records: Record<string, string>[]) {
     const raw = rec;
 
     const rawDate = rec["DATA"] ?? rec["Date"] ?? rec["date"] ?? "";
-    const rawOp = rec["Operation"] ?? rec["operation"] ?? rec["OPERATION"] ?? "";
-    const rawSym = rec["SYM"] ?? rec["Sym"] ?? rec["sym"] ?? rec["ticker"] ?? rec["TICKER"] ?? "";
-    const rawQty = rec["QTY"] ?? rec["Qty"] ?? rec["qty"] ?? rec["quantity"] ?? rec["QUANTITY"] ?? "";
-    const rawPrice = rec["PRICE"] ?? rec["Price"] ?? rec["price"] ?? "";
+    const rawOp = rec["Type"] ?? rec["type"] ?? rec["Operation"] ?? rec["operation"] ?? "";
+    const rawSym = rec["Ticker"] ?? rec["ticker"] ?? rec["SYM"] ?? rec["sym"] ?? "";
+    const rawQty = rec["Quantity"] ?? rec["quantity"] ?? rec["QTY"] ?? rec["qty"] ?? "";
+    const rawPrice = rec["Price (USD)"] ?? rec["PRICE"] ?? rec["Price"] ?? rec["price"] ?? "";
 
     if (!rawDate && !rawOp && !rawSym && !rawQty && !rawPrice) return; // skip blank rows
 
@@ -50,8 +68,8 @@ function parseRows(records: Record<string, string>[]) {
       return;
     }
 
-    const opUpper = String(rawOp).toUpperCase().trim();
-    if (opUpper !== "BUY" && opUpper !== "SELL") {
+    const type = normalizeOperation(rawOp);
+    if (!type) {
       invalid.push({ row: rowNum, raw, reason: `Invalid operation: "${rawOp}"` });
       return;
     }
@@ -62,19 +80,19 @@ function parseRows(records: Record<string, string>[]) {
       return;
     }
 
-    const quantity = parseFloat(String(rawQty).replace(",", "."));
+    const quantity = parseQuantity(rawQty);
     if (isNaN(quantity) || quantity <= 0) {
       invalid.push({ row: rowNum, raw, reason: `Invalid quantity: "${rawQty}"` });
       return;
     }
 
-    const price = parseFloat(String(rawPrice).replace(",", "."));
+    const price = parsePrice(rawPrice);
     if (isNaN(price) || price <= 0) {
       invalid.push({ row: rowNum, raw, reason: `Invalid price: "${rawPrice}"` });
       return;
     }
 
-    valid.push({ date, ticker, type: opUpper as "BUY" | "SELL", quantity, price });
+    valid.push({ date, ticker, type, quantity, price, brokerage: null });
   });
 
   return { valid, invalid };
@@ -94,7 +112,7 @@ export async function POST(request: Request) {
 
   if (filename.endsWith(".csv")) {
     const text = await file.text();
-    const result = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
+    const result = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true, delimiter: ";" });
     records = result.data;
   } else if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
     const buffer = await file.arrayBuffer();

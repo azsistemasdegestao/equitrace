@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { ticker, type, quantity, price, date } = body;
+  const { ticker, type, quantity, price, date, brokerage } = body;
 
   if (!ticker || !type || !quantity || !price || !date) {
     return NextResponse.json({ error: "All fields are required" }, { status: 400 });
@@ -44,6 +44,7 @@ export async function POST(request: Request) {
       quantity: qty,
       price: prc,
       date: new Date(date),
+      brokerage: brokerage ? String(brokerage).trim() : null,
     },
   });
 

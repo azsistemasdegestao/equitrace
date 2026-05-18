@@ -100,6 +100,22 @@ export default function ImportClient() {
   const hasConflicts = existingTickers.length > 0;
   const showPreview = valid.length > 0 || invalid.length > 0;
 
+  function downloadSample() {
+    const csv = [
+      "DATA;Type;Ticker;Quantity;Price (USD);PRINCIPAL;BROKERAGE",
+      "2022-03-09;buy;AAPL;10;165.32;1653.20;1.50",
+      "2023-01-15;buy;VNQ;5;87.74;438.70;1.50",
+      "2023-02-02;sale;MELI;1;1235.01;1235.01;1.50",
+    ].join("\n");
+
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sample-import.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Upload area */}
@@ -114,6 +130,17 @@ export default function ImportClient() {
           className="w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white file:text-black hover:file:bg-zinc-200 file:cursor-pointer disabled:opacity-50"
         />
         {loading && <p className="text-zinc-500 text-xs mt-3">Parsing file…</p>}
+
+        <div className="mt-4 flex items-center gap-3">
+          <span className="text-zinc-600 text-xs">Not sure about the format?</span>
+          <button
+            type="button"
+            onClick={downloadSample}
+            className="text-xs text-zinc-300 bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg transition"
+          >
+            Download sample file
+          </button>
+        </div>
       </div>
 
       {error && (

@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     quantity: r.quantity,
     price: r.price,
     date: new Date(r.date),
+    brokerage: r.brokerage ?? null,
   }));
 
   await prisma.transaction.createMany({ data });

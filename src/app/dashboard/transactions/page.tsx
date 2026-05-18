@@ -28,6 +28,7 @@ export default async function TransactionsPage() {
     quantity: t.quantity.toNumber(),
     price: t.price.toNumber(),
     total: t.quantity.toNumber() * t.price.toNumber(),
+    brokerage: t.brokerage ?? "",
   }));
 
   return (
@@ -54,6 +55,7 @@ export default async function TransactionsPage() {
                   <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Quantity</th>
                   <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Price</th>
                   <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Total</th>
+                  <th className="text-left text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Brokerage</th>
                 </tr>
               </thead>
               <tbody>
@@ -83,6 +85,9 @@ export default async function TransactionsPage() {
                     </td>
                     <td className="px-4 py-3 text-white text-right whitespace-nowrap font-medium">
                       {formatUSD(row.total)}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
+                      {row.brokerage || <span className="text-zinc-700">—</span>}
                     </td>
                   </tr>
                 ))}
