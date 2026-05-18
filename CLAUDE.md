@@ -98,6 +98,15 @@ prisma/
   seed.ts
   migrations/
 prisma.config.ts
+playwright.config.ts
+tests/
+  auth.setup.ts          # saves playwright/.auth/admin.json + user.json (setup project)
+  auth.spec.ts           # unauthenticated flows: redirect, login, logout
+  transactions.spec.ts   # user-auth: list, add transaction modal
+  import.spec.ts         # user-auth: CSV upload, preview, confirm
+  admin.spec.ts          # admin-auth: user list, CRUD, role redirect
+  fixtures/
+    sample.csv           # 3-row test CSV for import tests
 .env
 ```
 

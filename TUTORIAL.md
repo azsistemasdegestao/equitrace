@@ -539,6 +539,46 @@ npm install -D @types/papaparse
 
 ---
 
+### E2E Tests with Playwright
+
+**Important:** Playwright does not support Ubuntu 26.04 yet. Run all tests from **Windows PowerShell**, not WSL.
+
+**Prerequisites (Windows side):**
+1. Node.js installed on Windows (`node -v` in PowerShell to verify)
+2. Navigate to the project via the WSL filesystem:
+   ```powershell
+   cd \\wsl$\Ubuntu\home\alexa\wallet-exterior
+   npm install
+   npx playwright install chromium
+   ```
+
+**Running tests:**
+```powershell
+# Terminal 1 (WSL) — keep the dev server running
+npm run dev
+
+# Terminal 2 (PowerShell) — run the tests
+npx playwright test
+npx playwright test --ui          # interactive UI mode
+npx playwright show-report        # open HTML report after run
+```
+
+**Test structure:**
+
+| File | Auth | What it covers |
+|---|---|---|
+| `tests/auth.setup.ts` | — | Setup project: saves `admin.json` + `user.json` auth states |
+| `tests/auth.spec.ts` | None | Redirect, login, invalid credentials, sign out |
+| `tests/transactions.spec.ts` | User | List page, open modal, add BUY transaction |
+| `tests/import.spec.ts` | User | Upload CSV, preview, confirm import |
+| `tests/admin.spec.ts` | Admin | User list, create/reset/delete user, role redirect |
+
+**Auth strategy:** The `setup` project runs once before all tests and saves `playwright/.auth/admin.json` and `playwright/.auth/user.json`. Subsequent projects reuse these storage states — no login on every test.
+
+**DB note:** Tests run against the dev database. The `Admin — user CRUD` describe block uses `test.describe.serial` and cleans up after itself (creates then deletes `e2e-admin-test@wallet.com`). If a run is interrupted mid-way, delete that user manually via the Admin page before the next run.
+
+---
+
 ## 11. Known Gotchas
 
 | Issue | Cause | Fix |
@@ -549,3 +589,4 @@ npm install -D @types/papaparse
 | Middleware crypto error | Edge runtime lacks Node.js crypto | Use `proxy.ts` with `getToken` |
 | `middleware.ts` deprecated | Next.js 16 renamed it | Use `proxy.ts` with `proxy` export |
 | `prisma generate` not automatic | Prisma 7 breaking change | Run `npx prisma generate` manually |
+| Playwright fails on Ubuntu 26.04 | Ubuntu 26.04 not yet supported | Run `npx playwright test` from Windows PowerShell |
