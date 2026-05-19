@@ -6,7 +6,7 @@ import Link from "next/link";
 import TransactionModal from "@/components/transaction-modal";
 
 function Skeleton() {
-  return <div className="h-4 w-16 bg-zinc-800 rounded animate-pulse inline-block" />;
+  return <span className="h-4 w-16 bg-zinc-800 rounded animate-pulse inline-block" />;
 }
 
 type Row = {

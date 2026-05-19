@@ -41,7 +41,7 @@ function yAxisTick(v: number) {
 
 function Skeleton({ wide = false }: { wide?: boolean }) {
   return (
-    <div className={`h-4 ${wide ? "w-20" : "w-14"} bg-zinc-800 rounded animate-pulse inline-block`} />
+    <span className={`h-4 ${wide ? "w-20" : "w-14"} bg-zinc-800 rounded animate-pulse inline-block`} />
   );
 }
 
