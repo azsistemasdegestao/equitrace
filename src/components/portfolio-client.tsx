@@ -55,11 +55,29 @@ export default function PortfolioClient({ positions, initialQuotes, history }: P
   useEffect(() => {
     if (positions.length === 0) return;
     const tickers = positions.map((p) => p.ticker).join(",");
+    let snapshotSaved = false;
 
     async function poll() {
       try {
         const res = await fetch(`/api/quotes?tickers=${tickers}`);
-        if (res.ok) setQuotes(await res.json());
+        if (!res.ok) return;
+        const data: Record<string, number> = await res.json();
+        setQuotes(data);
+
+        if (!snapshotSaved) {
+          const totalValue = positions.reduce(
+            (sum, p) => sum + p.quantity * (data[p.ticker] ?? 0),
+            0
+          );
+          if (totalValue > 0) {
+            snapshotSaved = true;
+            fetch("/api/snapshot", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ totalValue }),
+            }).catch(() => {});
+          }
+        }
       } catch {}
     }
 

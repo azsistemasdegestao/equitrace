@@ -2,7 +2,6 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { computePositions } from "@/lib/portfolio";
-import { getQuotes } from "@/lib/finnhub";
 import PortfolioClient from "@/components/portfolio-client";
 import TransactionModal from "@/components/transaction-modal";
 
@@ -27,23 +26,8 @@ export default async function DashboardPage() {
     }))
   );
 
-  const tickers = positions.map((p) => p.ticker);
-  const quotes = tickers.length > 0 ? await getQuotes(tickers) : {};
+  // Lazy daily portfolio snapshot — triggered client-side via /api/snapshot after quotes load
 
-  // Lazy daily portfolio snapshot
-  if (positions.length > 0) {
-    const totalValue = positions.reduce((sum, p) => sum + p.quantity * (quotes[p.ticker] ?? 0), 0);
-    if (totalValue > 0) {
-      const todayStart = new Date();
-      todayStart.setUTCHours(0, 0, 0, 0);
-      const existing = await prisma.portfolioHistory.findFirst({
-        where: { userId, snapshotAt: { gte: todayStart } },
-      });
-      if (!existing) {
-        await prisma.portfolioHistory.create({ data: { userId, totalValue } });
-      }
-    }
-  }
 
   const history = await prisma.portfolioHistory.findMany({
     where: { userId },
@@ -65,7 +49,7 @@ export default async function DashboardPage() {
 
       <PortfolioClient
         positions={positions}
-        initialQuotes={quotes}
+        initialQuotes={{}}
         history={historyData}
       />
     </div>
