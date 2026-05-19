@@ -39,7 +39,7 @@ Equitrace is a mobile-first foreign asset wallet app for tracking investments on
 - Roles: `ADMIN` and `USER`.
 - Admin is created via seed script (`prisma/seed.ts`).
 - Admin can create new users and manage accounts.
-- Users can only change their own password.
+- Users can change their own password via the gear icon (⚙) modal in the navbar. Must provide the correct current password.
 - All `/dashboard/*` routes are protected via `src/proxy.ts`.
 - Users cannot access other users' data under any circumstances.
 
@@ -152,9 +152,10 @@ enum TransactionType {
 
 ## Navigation
 
-- Sticky top navbar with app name "Equitrace" and Sign out button.
+- Sticky top navbar with app name "Equitrace", gear icon (⚙) for change password, and Sign out button.
 - Nav tabs: Portfolio, Transactions, Import, Admin (admin only).
 - Active tab highlighted with `border-b-2 border-white`.
+- Gear icon opens the Change Password modal (available to all authenticated users).
 
 ---
 
@@ -179,6 +180,8 @@ src/
       transactions/
         route.ts
       search/
+        route.ts
+      profile/
         route.ts
       users/
         route.ts

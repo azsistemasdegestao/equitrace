@@ -1,15 +1,16 @@
 # Equitrace
 
-A mobile-first web application for tracking US stock investments (NYSE/NASDAQ). Log buy/sell transactions, track average cost (PM), and visualize portfolio performance over time.
+A mobile-first web application for tracking US stock investments (NYSE/NASDAQ). Log buy/sell transactions, track average cost, and visualize portfolio performance over time.
 
 ## Features
 
 - **Portfolio dashboard** — total value, allocation pie chart, historical line chart, positions table with live P&L
-- **Transactions** — add, edit, and delete BUY/SELL operations with live quote lookup
+- **Transactions** — add, edit, and delete BUY/SELL operations with live quote lookup and ticker search autocomplete
 - **CSV/Excel import** — bulk-import transactions from a semicolon-delimited file
 - **Live quotes** — Finnhub integration with 5-minute polling
 - **Admin** — user management panel (ADMIN role only)
 - **Authentication** — JWT-based login with email + password
+- **Change password** — users can update their own password via a modal (gear icon in the navbar)
 
 ## Tech stack
 

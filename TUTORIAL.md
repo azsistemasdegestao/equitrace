@@ -27,7 +27,9 @@ This document teaches you how this application was built from scratch — step b
 19. [Editing and deleting transactions](#19-editing-and-deleting-transactions)
 20. [UX polish: skeletons, empty states, mobile](#20-ux-polish-skeletons-empty-states-mobile)
 21. [Ticker search: autocomplete dropdown in the modal](#21-ticker-search-autocomplete-dropdown-in-the-modal)
-22. [Known gotchas reference](#22-known-gotchas-reference)
+22. [Auto-refresh after mutations](#22-auto-refresh-after-mutations)
+23. [Change password modal](#23-change-password-modal)
+24. [Known gotchas reference](#24-known-gotchas-reference)
 
 ---
 
@@ -1571,7 +1573,163 @@ User clicks "AAPL — APPLE INC"
 
 ---
 
-## 22. Known gotchas reference
+## 22. Auto-refresh after mutations
+
+After adding, editing, or deleting a transaction, the UI should update immediately — no F5 required. Achieving this reliably requires solving two separate problems.
+
+---
+
+### Problem 1: `useState` doesn't sync from new props
+
+`TransactionsClient` stores the list of transactions in state:
+
+```tsx
+const [rows, setRows] = useState(initialRows);
+```
+
+`useState(initialRows)` only uses `initialRows` as the **initial value** — on the very first render. If the parent passes new `initialRows` props later (after `router.refresh()` causes the server to re-render), React does not automatically update the state. `rows` is stuck with the original data.
+
+This means: adding a transaction via the modal calls `router.refresh()`, the server sends fresh data, but the list doesn't show the new row.
+
+**The fix:**
+
+```tsx
+useEffect(() => {
+  setRows(initialRows);
+}, [initialRows]);
+```
+
+This `useEffect` watches the `initialRows` prop. Whenever it changes (which only happens after a server re-render), it syncs the local `rows` state with the new server data.
+
+**Why doesn't this interfere with optimistic updates for edit/delete?**
+
+For edit and delete, we call `setRows(...)` optimistically AND call `router.refresh()`. The server re-renders with the updated data. `initialRows` updates to the confirmed server data. The `useEffect` runs and sets `rows` to the server data — which already matches the optimistic update. No conflict.
+
+---
+
+### Problem 2: The Next.js Router Cache
+
+Next.js keeps a client-side **Router Cache** — a short-lived in-memory store of recently visited pages. When you navigate from `/dashboard/transactions` back to `/dashboard`, Next.js may serve the cached version of the dashboard instead of re-fetching it from the server.
+
+This means: adding a transaction on the transactions page and then navigating to the portfolio dashboard could show the old positions (before the new transaction was counted).
+
+**The fix: `revalidatePath` in the API route handlers**
+
+```ts
+// In POST /api/transactions, PATCH /api/transactions/[id], DELETE /api/transactions/[id]
+import { revalidatePath } from "next/cache";
+
+// After the database operation:
+revalidatePath("/dashboard");
+revalidatePath("/dashboard/transactions");
+```
+
+When called from a Route Handler, `revalidatePath` sends a revalidation signal back to the client with the API response. Next.js clears the router cache for those paths. The next navigation to `/dashboard` fetches fresh data from the server.
+
+**Why two paths?** A mutation can be initiated from either page. Revalidating both ensures freshness regardless of where the user navigates next.
+
+---
+
+### The full picture
+
+| Scenario | Fix |
+|---|---|
+| Add transaction on transactions page → row doesn't appear | `useEffect` syncs `rows` from `initialRows` |
+| Add transaction on dashboard → positions don't update | `router.refresh()` re-runs server component, props update |
+| Any mutation → navigate to dashboard → shows stale data | `revalidatePath('/dashboard')` clears router cache |
+
+Edit and delete already used optimistic updates (`setRows(...)`) for immediate feedback, so they were never slow — but they now also benefit from the cache invalidation for cross-page consistency.
+
+---
+
+## 23. Change password modal
+
+Every authenticated user can change their own password. The feature follows the same modal pattern used throughout the app (see chapter 14).
+
+---
+
+### The API route: `PATCH /api/profile`
+
+Unlike the admin reset-password route (which requires no current password), a self-service password change must verify the user knows their current password. This prevents someone who finds an unlocked session from silently changing the password.
+
+```ts
+// src/app/api/profile/route.ts
+export async function PATCH(request: Request) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { currentPassword, newPassword } = await request.json();
+
+  if (!currentPassword || !newPassword) {
+    return NextResponse.json({ error: "All fields are required" }, { status: 400 });
+  }
+
+  if (newPassword.length < 6) {
+    return NextResponse.json({ error: "New password must be at least 6 characters" }, { status: 400 });
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+
+  const passwordMatch = await bcrypt.compare(currentPassword, user.password);
+  if (!passwordMatch) {
+    return NextResponse.json({ error: "Current password is incorrect" }, { status: 400 });
+  }
+
+  const hashed = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({ where: { id: session.user.id }, data: { password: hashed } });
+
+  return NextResponse.json({ success: true });
+}
+```
+
+**Key points:**
+
+- `session.user.id` is used to fetch the user — the route always operates on the logged-in user, not a client-provided ID.
+- `bcrypt.compare(currentPassword, user.password)` verifies the current password against the stored hash. If wrong, returns `400` with a clear message.
+- The new password is hashed with `bcrypt.hash(newPassword, 10)` before storing. Plain text passwords are never stored.
+
+---
+
+### The modal component
+
+`ChangePasswordModal` (`src/components/change-password-modal.tsx`) renders a gear icon (⚙) button. Clicking it opens the modal.
+
+The form has three fields:
+- **Current Password** — verified server-side
+- **New Password** — minimum 6 characters
+- **Confirm New Password** — compared client-side before the request is sent
+
+The client-side confirm check:
+
+```tsx
+if (form.newPassword !== form.confirmPassword) {
+  setError("New passwords do not match");
+  return; // don't send the request at all
+}
+```
+
+This is a UX guard only — it saves a network round-trip for a common mistake. The real validation happens on the server.
+
+After a successful update, the form shows a green "Password updated successfully." message and clears all fields. The modal stays open so the user can close it manually — this is intentional, giving them time to read the confirmation.
+
+---
+
+### Where it lives in the navbar
+
+`ChangePasswordModal` is rendered directly in `Navbar` (`src/components/navbar.tsx`), between the app name and the Sign out button:
+
+```tsx
+<div className="flex items-center gap-4">
+  <ChangePasswordModal />   {/* gear icon → modal */}
+  <button onClick={() => signOut(...)}>Sign out</button>
+</div>
+```
+
+The navbar is already a client component (`"use client"`), so adding another client component here has no extra cost.
+
+---
+
+## 24. Known gotchas reference
 
 Collected from real problems encountered while building this project:
 
@@ -1597,3 +1755,6 @@ Collected from real problems encountered while building this project:
 | Ticker search dropdown closes before item click registers | `onBlur` on the input fires before `onClick` on the dropdown button | Use `onMouseDown` + `e.preventDefault()` on dropdown items — prevents focus from shifting during the click |
 | Outside-click listener leaks after modal closes | `document.addEventListener` was never removed | Always return a cleanup function from `useEffect` that calls `removeEventListener` |
 | Debounce timer causes stale-closure issues | Timer ID stored in `useState` triggers unnecessary re-renders | Store timer ID in `useRef` — persists across renders without causing them |
+| Adding a transaction doesn't update the list | `useState(initialRows)` only initializes once — new props don't sync | Add `useEffect(() => setRows(initialRows), [initialRows])` to sync on prop change |
+| Dashboard shows stale data after mutation on another page | Next.js Router Cache serves old RSC payload on navigation | Call `revalidatePath('/dashboard')` in API route handlers after mutations |
+| Change password: someone with an open session changes password silently | No current password required | Always verify current password with `bcrypt.compare` before updating |
