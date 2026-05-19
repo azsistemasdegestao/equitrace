@@ -102,10 +102,10 @@ export default function ImportClient() {
 
   function downloadSample() {
     const csv = [
-      "DATA;Type;Ticker;Quantity;Price (USD);PRINCIPAL;BROKERAGE",
-      "2022-03-09;buy;AAPL;10;165.32;1653.20;1.50",
-      "2023-01-15;buy;VNQ;5;87.74;438.70;1.50",
-      "2023-02-02;sale;MELI;1;1235.01;1235.01;1.50",
+      "Date;Type;Ticker;Quantity;Price (USD)",
+      "2022-03-09;buy;AAPL;10;165.32",
+      "2023-01-15;buy;VNQ;5;87.74",
+      "2023-02-02;sell;MSFT;1;310.50",
     ].join("\n");
 
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));

@@ -33,7 +33,7 @@ This document teaches you how this application was built from scratch — step b
 
 **Equitrace** is a mobile-first web application for investors who buy US stocks (NYSE/NASDAQ) and want to track their portfolio over time.
 
-The core problem it solves: Brazilian investors who invest in US assets need to track transactions in dollars, compute their average cost (called *PM* — "preço médio" in Portuguese), and see the current value of each position. Most brokerage apps don't expose this in a clean way, especially for investors who use multiple brokerages.
+The core problem it solves: investors who buy US assets need to track transactions in dollars, compute their average cost (PM), and see the current value of each position. Most brokerage apps don't expose this in a clean way, especially for investors who use multiple brokerages.
 
 The main features are:
 
@@ -604,7 +604,7 @@ export default async function DashboardLayout({
 
 ## 10. Average cost (PM) calculation
 
-PM (*preço médio*, or average cost) is the most important calculation in the app. It determines the cost basis of each position, from which P&L is computed.
+PM (average cost) is the most important calculation in the app. It determines the cost basis of each position, from which P&L is computed.
 
 ### The algorithm
 
@@ -1014,21 +1014,20 @@ A single "upload and save" button would be risky: if the file has formatting err
 The CSV file uses **semicolons as the delimiter** (not commas). This avoids conflicts with numeric values that use commas as thousands separators (e.g., `2,670.95`).
 
 ```
-DATA;Type;Ticker;Quantity;Price (USD);PRINCIPAL;BROKERAGE
-2022-03-09;buy;AAPL;10;165.32;1653.20;1.50
-2023-01-15;buy;VNQ;5;87.74;438.70;1.50
-2023-02-02;sale;MELI;1;1235.01;1235.01;1.50
+Date;Type;Ticker;Quantity;Price (USD)
+2022-03-09;buy;AAPL;10;165.32
+2023-01-15;buy;VNQ;5;87.74
+2023-02-02;sell;MSFT;1;310.50
 ```
 
 | Column | Format | Notes |
 |---|---|---|
-| `DATA` | `YYYY-MM-DD` | Any valid date string accepted by `new Date()` |
-| `Type` | `buy` or `sale` (any case) | `buy` → `BUY`, `sale` → `SELL` |
+| `Date` | `YYYY-MM-DD` | Any valid date string accepted by `new Date()` |
+| `Type` | `buy` or `sell` (any case) | `buy` → `BUY`, `sell` → `SELL` |
 | `Ticker` | Ticker symbol (e.g., `AAPL`) | Normalized to uppercase |
 | `Quantity` | Dot as decimal separator (`10`, `1.71`) | Parsed directly with `parseFloat` |
 | `Price (USD)` | Dot as decimal, comma as thousands (`2,670.95`) | Commas stripped before `parseFloat` |
-| `PRINCIPAL` | Any | **Ignored** — not saved |
-| `BROKERAGE` | Any | **Ignored** — not saved |
+| Any other column | Any | **Ignored** — not saved |
 
 ### The parsing functions
 
@@ -1042,11 +1041,11 @@ function parseDate(raw: string): string | null {
   return parsed.toISOString();
 }
 
-// "buy" → "BUY", "sale" → "SELL". Case-insensitive.
+// "buy" → "BUY", "sell" → "SELL". Case-insensitive.
 function normalizeOperation(raw: string): "BUY" | "SELL" | null {
   const upper = String(raw).toUpperCase().trim();
   if (upper === "BUY") return "BUY";
-  if (upper === "SELL" || upper === "SALE") return "SELL";
+  if (upper === "SELL") return "SELL";
   return null;
 }
 
@@ -1061,7 +1060,7 @@ function parseQuantity(raw: string): number {
 }
 ```
 
-**Why accept `sale` in addition to `SELL`?** The brokerage export uses `buy`/`sale` (lowercase, and "sale" instead of "sell"). The normalizer maps both spellings to the canonical `BUY`/`SELL` enum values stored in the database.
+**Why accept `buy`/`sell` in lowercase?** Exported files often use lowercase. The normalizer uppercases before comparing, mapping both `buy` and `BUY` to the canonical `BUY` enum value.
 
 **Why use `new Date()` directly instead of a regex?** The brokerage file uses `YYYY-MM-DD`, which JavaScript's `Date` constructor parses reliably across all environments. A regex would add complexity without benefit for this well-formed format.
 
@@ -1112,10 +1111,10 @@ The import page includes a "Download sample file" button. It generates a valid C
 ```ts
 function downloadSample() {
   const csv = [
-    "DATA;Type;Ticker;Quantity;Price (USD);PRINCIPAL;BROKERAGE",
-    "2022-03-09;buy;AAPL;10;165.32;1653.20;1.50",
-    "2023-01-15;buy;VNQ;5;87.74;438.70;1.50",
-    "2023-02-02;sale;MELI;1;1235.01;1235.01;1.50",
+    "Date;Type;Ticker;Quantity;Price (USD)",
+    "2022-03-09;buy;AAPL;10;165.32",
+    "2023-01-15;buy;VNQ;5;87.74",
+    "2023-02-02;sell;MSFT;1;310.50",
   ].join("\n");
 
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));

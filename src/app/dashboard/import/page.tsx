@@ -13,8 +13,8 @@ export default function ImportPage() {
       <div className="mb-4 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
         <p className="text-zinc-400 text-xs font-medium mb-1">Expected columns</p>
         <p className="text-zinc-500 text-xs">
-          <span className="text-zinc-300">DATA</span> (YYYY-MM-DD) &nbsp;·&nbsp;
-          <span className="text-zinc-300">Type</span> (buy / sale) &nbsp;·&nbsp;
+          <span className="text-zinc-300">Date</span> (YYYY-MM-DD) &nbsp;·&nbsp;
+          <span className="text-zinc-300">Type</span> (buy / sell) &nbsp;·&nbsp;
           <span className="text-zinc-300">Ticker</span> &nbsp;·&nbsp;
           <span className="text-zinc-300">Quantity</span> &nbsp;·&nbsp;
           <span className="text-zinc-300">Price (USD)</span>

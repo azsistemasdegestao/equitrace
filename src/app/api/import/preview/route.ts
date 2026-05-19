@@ -28,11 +28,11 @@ function parseDate(raw: string): string | null {
   return parsed.toISOString();
 }
 
-// "buy" → "BUY", "sale" → "SELL". Case-insensitive.
+// "buy" → "BUY", "sell" → "SELL". Case-insensitive.
 function normalizeOperation(raw: string): "BUY" | "SELL" | null {
   const upper = String(raw).toUpperCase().trim();
   if (upper === "BUY") return "BUY";
-  if (upper === "SELL" || upper === "SALE") return "SELL";
+  if (upper === "SELL") return "SELL";
   return null;
 }
 
@@ -54,7 +54,7 @@ function parseRows(records: Record<string, string>[]) {
     const rowNum = i + 2; // 1-based + header
     const raw = rec;
 
-    const rawDate = rec["DATA"] ?? rec["Date"] ?? rec["date"] ?? "";
+    const rawDate = rec["Date"] ?? rec["date"] ?? rec["DATE"] ?? "";
     const rawOp = rec["Type"] ?? rec["type"] ?? rec["Operation"] ?? rec["operation"] ?? "";
     const rawSym = rec["Ticker"] ?? rec["ticker"] ?? rec["SYM"] ?? rec["sym"] ?? "";
     const rawQty = rec["Quantity"] ?? rec["quantity"] ?? rec["QTY"] ?? rec["qty"] ?? "";
