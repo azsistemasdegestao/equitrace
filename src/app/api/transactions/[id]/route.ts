@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 async function ownsTransaction(userId: string, id: string) {
@@ -45,6 +46,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     },
   });
 
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/transactions");
   return NextResponse.json(updated);
 }
 
@@ -57,5 +60,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.transaction.delete({ where: { id } });
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/transactions");
   return new NextResponse(null, { status: 204 });
 }

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Equitrace is a mobile-first foreign asset wallet app for tracking investments on US stock exchanges (NYSE/NASDAQ). It supports stocks, ETFs, and REITs. Users can log buy/sell transactions, view their average cost (PM), see current portfolio positions with real-time quotes, and visualize portfolio history over time.
+Equitrace is a mobile-first foreign asset wallet app for tracking investments on US stock exchanges (NYSE/NASDAQ). It supports stocks, ETFs, and REITs. Users can log buy/sell transactions, view their average cost, see current portfolio positions with real-time quotes, and visualize portfolio history over time.
 
 ---
 
@@ -96,9 +96,9 @@ enum TransactionType {
 
 ---
 
-## Average Cost (PM) Calculation
+## Average Cost Calculation
 
-- PM is calculated at runtime from the full transaction history per ticker.
+- Average cost is calculated at runtime from the full transaction history per ticker.
 - Formula: total cost of remaining shares / remaining shares.
 - SELL transactions reduce the quantity but do not change the average cost of remaining shares.
 - All values are in USD.
@@ -126,7 +126,7 @@ enum TransactionType {
 - Summary cards: Total Value (USD), number of assets.
 - Pie chart: portfolio distribution by ticker.
 - Line chart: portfolio value over time (built from `PortfolioHistory`, starts from first use).
-- Table: position per ticker with columns — Ticker, Quantity, Avg Cost (PM), Current Price, Current Value, P&L (%).
+- Table: position per ticker with columns — Ticker, Quantity, Avg Cost, Current Price, Current Value, P&L (%).
 
 ### `/dashboard/transactions`
 - List of all transactions for the logged-in user, sorted by date descending.
@@ -203,7 +203,7 @@ src/
     auth.ts
     prisma.ts
     finnhub.ts               # Finnhub API client
-    portfolio.ts             # PM calculation logic
+    portfolio.ts             # average cost calculation logic
   types/
     next-auth.d.ts
   proxy.ts
@@ -239,7 +239,7 @@ FINNHUB_API_KEY="..."
 | Middleware file | `proxy.ts` (not `middleware.ts`) | Next.js 16 renamed middleware to proxy |
 | Proxy export | `export async function proxy` | Next.js 16 requires this exact name |
 | Ticker search | Finnhub `/search` via `/api/search` | Prevents typos; filtered to US Common Stock (no foreign-exchange suffixes) |
-| PM calculation | Runtime from transactions | Always accurate, no denormalization |
+| Average cost calculation | Runtime from transactions | Always accurate, no denormalization |
 | Portfolio history | Lazy daily snapshot | Avoids cron jobs, no historical quotes needed |
 | Quote refresh | Polling every 5 min | Simple, fits Finnhub free tier limits |
 | CSV import | Preview before insert | User controls conflict resolution |
@@ -252,7 +252,7 @@ FINNHUB_API_KEY="..."
 - All API routes go in `src/app/api/`.
 - Always filter queries by `userId` from the session — never trust client-provided user IDs.
 - Use `src/lib/prisma.ts` singleton for all database access.
-- Use `src/lib/portfolio.ts` for PM calculation logic.
+- Use `src/lib/portfolio.ts` for average cost calculation logic.
 - Use `src/lib/finnhub.ts` for all quote fetching.
 - Server Components by default; use `"use client"` only when needed (forms, charts, interactive UI).
 - Never expose passwords or sensitive fields in API responses.

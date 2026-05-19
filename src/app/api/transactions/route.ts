@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -48,5 +49,7 @@ export async function POST(request: Request) {
     },
   });
 
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/transactions");
   return NextResponse.json(transaction, { status: 201 });
 }

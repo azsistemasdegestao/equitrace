@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Equitrace** — a mobile-first foreign asset wallet app for tracking US stock exchange investments (NYSE/NASDAQ). Users log buy/sell transactions, track average cost (PM), and visualize portfolio history.
+**Equitrace** — a mobile-first foreign asset wallet app for tracking US stock exchange investments (NYSE/NASDAQ). Users log buy/sell transactions, track average cost, and visualize portfolio history.
 
 ## Commands
 
@@ -38,7 +38,7 @@ Follow these steps for every implementation:
 
 - **Next.js 16 proxy file**: middleware is `src/proxy.ts` with `export async function proxy` — Next.js 16 deprecated `middleware.ts` in favor of `proxy.ts`. **NEVER create or use `middleware.ts`** — having both files causes conflict. Only `proxy.ts` must exist.
 - **Prisma 7 + PostgreSQL**: requires `@prisma/adapter-pg` and `PrismaPg` adapter (not the legacy direct connection). The singleton is in `src/lib/prisma.ts`.
-- **PM (average cost) calculation**: computed at runtime from full transaction history in `src/lib/portfolio.ts`. SELL reduces quantity but does not change the average cost of remaining shares.
+- **Average cost calculation**: computed at runtime from full transaction history in `src/lib/portfolio.ts`. SELL reduces quantity but does not change the average cost of remaining shares.
 - **Portfolio history**: lazy daily snapshot — triggered client-side after quotes load, via `POST /api/snapshot`. Stored in `PortfolioHistory`. No cron, no background worker.
 - **Finnhub quotes**: fetched in `src/lib/finnhub.ts`, polled every 5 minutes client-side via `/api/quotes`. API key via `FINNHUB_API_KEY` env var. Free tier — avoid unnecessary calls.
 - **Recharts + SSR**: Recharts uses browser APIs that fail during SSR. Use a `mounted` state (`useState(false)` + `useEffect(() => setMounted(true), [])`) and only render charts after mount.
@@ -98,7 +98,7 @@ src/
   lib/
     auth.ts                         # Auth.js v5 config
     finnhub.ts                      # Finnhub client — getQuote/getQuotes with 5-min in-memory cache
-    portfolio.ts                    # computePositions(transactions) — PM calculation
+    portfolio.ts                    # computePositions(transactions) — average cost calculation
     prisma.ts                       # Prisma singleton
   types/
     next-auth.d.ts                  # Session type augmentation (id + role)

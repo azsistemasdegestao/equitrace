@@ -15,7 +15,7 @@ This document teaches you how this application was built from scratch — step b
 7. [Authentication: Auth.js v5](#7-authentication-authjs-v5)
 8. [Route protection: the proxy file](#8-route-protection-the-proxy-file)
 9. [Dashboard layout and rendering strategy](#9-dashboard-layout-and-rendering-strategy)
-10. [Average cost (PM) calculation](#10-average-cost-pm-calculation)
+10. [Average cost calculation](#10-average-cost-calculation)
 11. [Live quotes: Finnhub](#11-live-quotes-finnhub)
 12. [Portfolio history: lazy daily snapshots](#12-portfolio-history-lazy-daily-snapshots)
 13. [Charts with Recharts and the SSR trap](#13-charts-with-recharts-and-the-ssr-trap)
@@ -35,7 +35,7 @@ This document teaches you how this application was built from scratch — step b
 
 **Equitrace** is a mobile-first web application for investors who buy US stocks (NYSE/NASDAQ) and want to track their portfolio over time.
 
-The core problem it solves: investors who buy US assets need to track transactions in dollars, compute their average cost (PM), and see the current value of each position. Most brokerage apps don't expose this in a clean way, especially for investors who use multiple brokerages.
+The core problem it solves: investors who buy US assets need to track transactions in dollars, compute their average cost, and see the current value of each position. Most brokerage apps don't expose this in a clean way, especially for investors who use multiple brokerages.
 
 The main features are:
 
@@ -604,18 +604,18 @@ export default async function DashboardLayout({
 
 ---
 
-## 10. Average cost (PM) calculation
+## 10. Average cost calculation
 
-PM (average cost) is the most important calculation in the app. It determines the cost basis of each position, from which P&L is computed.
+The average cost (shown as **Avg Cost** in the UI) is the most important calculation in the app. It determines the cost basis of each position, from which P&L is computed.
 
 ### The algorithm
 
 The rule for BUY/SELL is asymmetric:
 
-- **BUY:** add the cost. `totalCost += quantity × price`. `totalQty += quantity`. New PM = `totalCost / totalQty`.
-- **SELL:** the PM does **not** change. You are simply removing shares at the existing average cost. `totalQty -= quantity`. `totalCost = PM × newQty`.
+- **BUY:** add the cost. `totalCost += quantity × price`. `totalQty += quantity`. New avg cost = `totalCost / totalQty`.
+- **SELL:** the average cost does **not** change. You are simply removing shares at the existing average cost. `totalQty -= quantity`. `totalCost = avgCost × newQty`.
 
-Why does SELL not change the PM? Because you are not acquiring assets at a new price — you are disposing of existing ones. The average cost of what you still hold is unchanged.
+Why does SELL not change the average cost? Because you are not acquiring assets at a new price — you are disposing of existing ones. The average cost of what you still hold is unchanged.
 
 **`src/lib/portfolio.ts`:**
 ```ts
@@ -650,11 +650,11 @@ export function computePositions(transactions: TxInput[]): Position[] {
 }
 ```
 
-**Why sort first?** The calculation must be done in chronological order. If a BUY comes after a SELL in the database result, the PM would be wrong.
+**Why sort first?** The calculation must be done in chronological order. If a BUY comes after a SELL in the database result, the average cost would be wrong.
 
 **Why `1e-8` threshold?** After multiple fractional SELL operations, floating-point arithmetic can leave a quantity like `0.000000000001` instead of exactly `0`. Using `> 1e-8` as the threshold filters out these effectively-zero positions.
 
-**Why compute at runtime instead of storing PM in the database?** Storing a derived value creates consistency problems. If a user edits or deletes an old transaction, the stored PM would be stale. Computing it from the full history on every request guarantees it is always correct.
+**Why compute at runtime instead of storing the average cost in the database?** Storing a derived value creates consistency problems. If a user edits or deletes an old transaction, the stored value would be stale. Computing it from the full history on every request guarantees it is always correct.
 
 ---
 

@@ -67,6 +67,11 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [quotesLoading, setQuotesLoading] = useState(initialRows.length > 0);
 
+  // Sync rows when the server re-renders after router.refresh()
+  useEffect(() => {
+    setRows(initialRows);
+  }, [initialRows]);
+
   useEffect(() => {
     if (rows.length === 0) return;
     const tickers = [...new Set(rows.map((r) => r.ticker))].join(",");
