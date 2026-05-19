@@ -24,7 +24,8 @@ This document teaches you how this application was built from scratch — step b
 16. [CSV and Excel import](#16-csv-and-excel-import)
 17. [Admin: user management](#17-admin-user-management)
 18. [End-to-end tests with Playwright](#18-end-to-end-tests-with-playwright)
-19. [Known gotchas reference](#19-known-gotchas-reference)
+19. [Editing and deleting transactions](#19-editing-and-deleting-transactions)
+20. [Known gotchas reference](#20-known-gotchas-reference)
 
 ---
 
@@ -697,9 +698,9 @@ export async function getQuote(symbol: string): Promise<number | null> {
 
 **The quotes API route** — `src/app/api/quotes/route.ts` — is a server-side proxy. The browser never touches the Finnhub API directly, so the API key stays secret. The client calls `/api/quotes?tickers=AAPL,MSFT` and gets back a JSON object of prices.
 
-### Client-side polling
+### Client-side polling — and why quotes are NOT fetched server-side
 
-The `PortfolioClient` component polls for fresh quotes every 5 minutes:
+The `PortfolioClient` component fetches quotes immediately on mount and then polls every 5 minutes:
 
 ```ts
 useEffect(() => {
@@ -719,45 +720,115 @@ useEffect(() => {
 
 The interval is cleaned up when the component unmounts (navigating away). Without the cleanup, the interval would keep running in the background and accumulate with every re-mount.
 
+**Why not fetch quotes in the server component (dashboard/page.tsx) and pass them as `initialQuotes`?**
+
+It seems natural to pre-load quotes on the server so the page renders with data already visible. In practice, this is a bad idea:
+
+- Finnhub API calls take 500ms–3s each over the network.
+- With 5 tickers, the server waits for all 5 (even in parallel) before sending any HTML to the browser.
+- The user stares at a blank page for several seconds instead of seeing the portfolio instantly.
+
+The better pattern: pass `initialQuotes: {}` from the server and let the client fetch quotes right after mount. The page loads instantly. Quotes appear 1–2 seconds later. This is a much better perceived performance.
+
+```ts
+// dashboard/page.tsx — DO NOT call getQuotes() here
+return (
+  <PortfolioClient
+    positions={positions}
+    initialQuotes={{}}   // client fetches on mount
+    history={historyData}
+  />
+);
+```
+
+The same reasoning applies to the transactions list: quotes are fetched by `TransactionsClient` on mount, not by the server component.
+
 ---
 
 ## 12. Portfolio history: lazy daily snapshots
 
 To show a "Portfolio value over time" line chart, we need historical data. We could use a cron job or an external service to snapshot the value daily. Instead, we use a simpler approach: **lazy snapshotting**.
 
-Every time the dashboard page is loaded, it checks whether a `PortfolioHistory` record for today already exists. If not, it creates one.
+Once per day (per session), after the client loads live quotes and computes the total portfolio value, it fires a POST to `/api/snapshot`. That endpoint checks whether a `PortfolioHistory` record for today already exists and creates one if not.
 
-From `src/app/dashboard/page.tsx`:
+### Why the snapshot moved to the client
+
+Originally, the snapshot was created server-side in `dashboard/page.tsx` — it fetched quotes via Finnhub, computed `totalValue`, and saved the record before returning HTML. This worked but caused the page to block on Finnhub (see chapter 11). Moving the snapshot to the client decouples page load speed from the snapshot creation.
+
+### The snapshot endpoint
+
+**`src/app/api/snapshot/route.ts`:**
 ```ts
-if (positions.length > 0) {
-  const totalValue = positions.reduce(
-    (sum, p) => sum + p.quantity * (quotes[p.ticker] ?? 0),
-    0
-  );
-  if (totalValue > 0) {
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
+export async function POST(request: Request) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const existing = await prisma.portfolioHistory.findFirst({
-      where: { userId, snapshotAt: { gte: todayStart } },
+  const { totalValue } = await request.json();
+  if (typeof totalValue !== "number" || totalValue <= 0) {
+    return new NextResponse(null, { status: 204 });
+  }
+
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  const existing = await prisma.portfolioHistory.findFirst({
+    where: { userId: session.user.id, snapshotAt: { gte: todayStart } },
+  });
+
+  if (!existing) {
+    await prisma.portfolioHistory.create({
+      data: { userId: session.user.id, totalValue },
     });
+  }
 
-    if (!existing) {
-      await prisma.portfolioHistory.create({ data: { userId, totalValue } });
+  return new NextResponse(null, { status: 204 });
+}
+```
+
+### How the client triggers it
+
+In `PortfolioClient`, after the first successful quote fetch, the total value is computed and sent to `/api/snapshot`. A `snapshotSaved` flag prevents duplicate calls on subsequent polls:
+
+```ts
+let snapshotSaved = false;
+
+async function poll() {
+  const res = await fetch(`/api/quotes?tickers=${tickers}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  setQuotes(data);
+
+  if (!snapshotSaved) {
+    const totalValue = positions.reduce(
+      (sum, p) => sum + p.quantity * (data[p.ticker] ?? 0),
+      0
+    );
+    if (totalValue > 0) {
+      snapshotSaved = true;
+      fetch("/api/snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ totalValue }),
+      }).catch(() => {}); // fire and forget
     }
   }
 }
 ```
 
+**Why `snapshotSaved` and not just checking the date each time?** The flag avoids sending a network request on every poll tick (every 5 minutes). Once the snapshot is saved for the session, there is nothing more to do until the next day.
+
+**Why `.catch(() => {})` on the snapshot fetch?** The snapshot is non-critical. If the request fails (network hiccup, server restart), the page should not break. The history chart will simply not have today's point — which is acceptable.
+
 **Why use UTC midnight?** Using `setUTCHours(0, 0, 0, 0)` makes the "today" boundary consistent regardless of the server's timezone. Without this, a server in a different timezone might create two snapshots in a calendar day.
 
 **Trade-offs of this approach:**
 - ✅ No cron job, no background worker, no extra infrastructure
-- ✅ The snapshot is always taken at the real market price at the time of the visit
+- ✅ Page loads instantly — snapshot happens in the background
+- ✅ The snapshot captures the real market price at the time of the visit
 - ⚠️ If a user doesn't open the app on a given day, there is no snapshot for that day (the chart will have gaps)
 - ⚠️ The snapshot captures the price at the time of the visit, not at market close
 
-For this project, these trade-offs are acceptable. Investors who want daily precision can open the app each day.
+For this project, these trade-offs are acceptable.
 
 ---
 
@@ -827,6 +898,55 @@ const transactions = await prisma.transaction.findMany({
   orderBy: { date: "desc" },
 });
 ```
+
+### Quote lookup in the modal
+
+When registering a transaction, the user needs to know the current market price. Typing a ticker and switching to a browser tab to look it up is friction. The modal removes that friction with an inline quote lookup.
+
+When the Ticker field loses focus (`onBlur`), the modal calls `/api/quotes?tickers=X` and shows a hint next to the Price label:
+
+```
+Price (USD)    current: $213.49  [use]
+```
+
+Clicking **use** fills the Price field with the live quote. The hint is cleared when the ticker changes or the modal is reopened.
+
+```ts
+async function handleTickerBlur() {
+  if (!form.ticker) return;
+  setQuoteLoading(true);
+  try {
+    const res = await fetch(`/api/quotes?tickers=${form.ticker}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data[form.ticker]) setCurrentQuote(data[form.ticker]);
+    }
+  } catch {}
+  finally { setQuoteLoading(false); }
+}
+```
+
+**Why `onBlur` instead of `onChange`?** Fetching on every keystroke would hammer the API with partial tickers like `A`, `AP`, `APP`, `APPL`, `AAPL`. `onBlur` triggers once when the user finishes typing and tabs to the next field — exactly the right moment.
+
+**Why not cache the result?** The modal's quote is only used once (to fill the Price field). The Finnhub server-side cache handles deduplication across users. No client-side caching needed here.
+
+### Transactions list with live quotes
+
+The transactions list (`/dashboard/transactions`) is split into two layers:
+
+- **Server component** (`transactions/page.tsx`) — fetches rows from the database and passes them as props. Fast, no external calls.
+- **Client component** (`TransactionsClient`) — receives the rows, fetches live quotes on mount, and renders the full table.
+
+The table has two columns beyond the basic transaction data:
+
+| Column | Formula | Shown for |
+|---|---|---|
+| **Current Value** | `quantity × current price` | All rows |
+| **P&L** | `current value − paid total` | BUY rows only |
+
+**Why P&L only for BUY?** For a SELL, the "value" of those shares today has no clear meaning — you no longer hold them. Showing a P&L for a SELL would be confusing (it could be interpreted as "opportunity cost" but that is not what users expect). Keeping it to BUY rows gives a clear, actionable signal: "this purchase is up $X or down $Y."
+
+Quotes are polled every 5 minutes, same as the portfolio page.
 
 ---
 
@@ -1100,7 +1220,77 @@ Tests run against the development database. The admin test suite creates a user 
 
 ---
 
-## 19. Known gotchas reference
+## 19. Editing and deleting transactions
+
+Transactions can be edited (to correct mistakes) or deleted. Both actions require verifying ownership — a user must not be able to modify another user's data.
+
+### The API endpoints
+
+**`src/app/api/transactions/[id]/route.ts`** exposes PATCH and DELETE:
+
+```ts
+async function ownsTransaction(userId: string, id: string) {
+  const t = await prisma.transaction.findUnique({ where: { id } });
+  return t?.userId === userId ? t : null;
+}
+
+export async function PATCH(request, { params }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const existing = await ownsTransaction(session.user.id, params.id);
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // ... validate body ...
+
+  const updated = await prisma.transaction.update({
+    where: { id: params.id },
+    data: { ticker, type, quantity, price, date, brokerage },
+  });
+
+  return NextResponse.json(updated);
+}
+
+export async function DELETE(_request, { params }) {
+  const session = await auth();
+  // ...ownership check...
+  await prisma.transaction.delete({ where: { id: params.id } });
+  return new NextResponse(null, { status: 204 });
+}
+```
+
+**Why `ownsTransaction` instead of just using the ID directly?** A user could call `DELETE /api/transactions/<other-user-id>` if they know or guess another user's transaction ID. The ownership check fetches the record first and verifies `userId` matches the session. If not, the API returns `404` (not `403`) — this avoids confirming that the ID exists.
+
+**Why `404` and not `403` for unauthorized access?** Returning `403 Forbidden` reveals that the resource exists. `404 Not Found` is safer — the user sees the same response whether the ID doesn't exist or doesn't belong to them.
+
+### The UI
+
+In `TransactionsClient`, each row has two icon buttons in an **Actions** column at the far right:
+
+- **Pencil icon** → opens an Edit modal pre-filled with the row's current values
+- **Trash icon** → opens a Delete confirmation modal
+
+**Edit modal:** identical fields to the Add Transaction modal (ticker, type, quantity, price, date, brokerage), including the quote lookup (`onBlur` on ticker). The form submits to `PATCH /api/transactions/[id]`. On success, the row is updated in local state immediately — no page reload needed.
+
+**Delete modal:** shows "Delete transaction? This action cannot be undone." with a red Delete button. On confirm, it calls `DELETE /api/transactions/[id]` and removes the row from local state.
+
+### Optimistic UI
+
+Both edit and delete update `rows` state in React immediately after the API responds successfully, before `router.refresh()` runs. This means the user sees the change instantly — the table does not flash or reload. The `router.refresh()` call syncs the server component cache in the background.
+
+```ts
+// Edit: update the row in local state
+setRows((prev) =>
+  prev.map((r) => r.id === editRow.id ? { ...r, ...updatedFields } : r)
+);
+
+// Delete: remove the row from local state
+setRows((prev) => prev.filter((r) => r.id !== deleteId));
+```
+
+---
+
+## 20. Known gotchas reference
 
 Collected from real problems encountered while building this project:
 
@@ -1110,10 +1300,14 @@ Collected from real problems encountered while building this project:
 | `PrismaClient` fails to connect | Prisma 7 requires a driver adapter | Instantiate with `new PrismaPg({ connectionString })` and pass to `new PrismaClient({ adapter })` |
 | `next-auth@stable` (v4) incompatible | v4 does not support the App Router | Install `next-auth@beta` (v5) |
 | Middleware crashes with crypto error | Edge Runtime lacks Node.js `crypto` | Use `getToken` from `next-auth/jwt` (uses Web Crypto API) |
-| `middleware.ts` not picked up | Next.js 16 renamed the file | Use `proxy.ts` with `export async function proxy` |
+| `middleware.ts` deprecation warning | Next.js 16 renamed the convention | Use `proxy.ts` with `export async function proxy` |
 | App stops loading entirely | Both `middleware.ts` and `proxy.ts` exist simultaneously | Delete `middleware.ts` — only `proxy.ts` must exist |
 | `prisma generate` not run after migration | Prisma 7 removed auto-generate | Run `npx prisma generate` manually after schema changes |
 | Recharts crashes on server | Recharts uses browser-only APIs | Gate chart renders on `mounted` state (set in `useEffect`) |
 | Playwright tests fail on Ubuntu 26.04 | Ubuntu 26.04 not yet supported | Run `npx playwright test` from Windows PowerShell |
 | Multiple Prisma Client instances in dev | Next.js hot reload creates new module instances | Store client on `globalThis` in development |
 | Decimal rounding errors in positions | JavaScript `number` uses floating-point | Use Prisma's `Decimal` type; call `.toNumber()` only for display |
+| Dashboard takes 10–20s to load | `getQuotes()` called server-side blocks SSR | Pass `initialQuotes: {}` and let the client fetch on mount |
+| Quote lookup in modal fetches on every keystroke | `onChange` triggers too often | Use `onBlur` on the Ticker field — fires once when user leaves the field |
+| Snapshot not saved when quotes move to client | Server no longer has quote values | POST to `/api/snapshot` from the client after the first successful quote fetch |
+| Edit/delete API returns 403 for wrong user | Leaks that the resource exists | Return `404` for both "not found" and "not yours" — safer response |
