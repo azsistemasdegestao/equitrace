@@ -20,7 +20,6 @@ export default async function TransactionsPage() {
     quantity: t.quantity.toNumber(),
     price: t.price.toNumber(),
     total: t.quantity.toNumber() * t.price.toNumber(),
-    brokerage: t.brokerage ?? "",
   }));
 
   return <TransactionsClient rows={rows} />;

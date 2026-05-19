@@ -12,7 +12,6 @@ type Row = {
   quantity: number;
   price: number;
   total: number;
-  brokerage: string;
 };
 
 type EditForm = {
@@ -21,7 +20,6 @@ type EditForm = {
   quantity: string;
   price: string;
   date: string;
-  brokerage: string;
 };
 
 function usd(v: number) {
@@ -53,7 +51,6 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
   const [rows, setRows] = useState(initialRows);
   const [quotes, setQuotes] = useState<Record<string, number>>({});
 
-  // Edit modal state
   const [editRow, setEditRow] = useState<Row | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [editLoading, setEditLoading] = useState(false);
@@ -61,7 +58,6 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
   const [editQuoteLoading, setEditQuoteLoading] = useState(false);
   const [editCurrentQuote, setEditCurrentQuote] = useState<number | null>(null);
 
-  // Delete confirm state
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -89,7 +85,6 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
       quantity: String(row.quantity),
       price: String(row.price),
       date: row.date,
-      brokerage: row.brokerage,
     });
     setEditError("");
     setEditCurrentQuote(null);
@@ -154,7 +149,6 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
                 price: prc,
                 total: qty * prc,
                 date: new Date(updated.date).toISOString().slice(0, 10),
-                brokerage: updated.brokerage ?? "",
               }
             : r
         )
@@ -208,7 +202,6 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
                   <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Paid</th>
                   <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Current Value</th>
                   <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">P&amp;L</th>
-                  <th className="text-left text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Brokerage</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -226,59 +219,33 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
                       <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{row.date}</td>
                       <td className="px-4 py-3 text-white font-medium whitespace-nowrap">{row.ticker}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                            row.type === "BUY"
-                              ? "bg-emerald-500/15 text-emerald-400"
-                              : "bg-red-500/15 text-red-400"
-                          }`}
-                        >
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                          row.type === "BUY" ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"
+                        }`}>
                           {row.type}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-white text-right whitespace-nowrap">
                         {row.quantity.toLocaleString("en-US")}
                       </td>
-                      <td className="px-4 py-3 text-white text-right whitespace-nowrap">
-                        {usd(row.price)}
-                      </td>
-                      <td className="px-4 py-3 text-white text-right whitespace-nowrap font-medium">
-                        {usd(row.total)}
-                      </td>
+                      <td className="px-4 py-3 text-white text-right whitespace-nowrap">{usd(row.price)}</td>
+                      <td className="px-4 py-3 text-white text-right whitespace-nowrap font-medium">{usd(row.total)}</td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        {currentValue != null ? (
-                          <span className="text-white">{usd(currentValue)}</span>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
+                        {currentValue != null
+                          ? <span className="text-white">{usd(currentValue)}</span>
+                          : <span className="text-zinc-600">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap font-medium">
-                        {pnl != null ? (
-                          <span className={pnl >= 0 ? "text-emerald-400" : "text-red-400"}>
-                            {pnl >= 0 ? "+" : ""}
-                            {usd(pnl)}
-                          </span>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
-                        {row.brokerage || <span className="text-zinc-700">—</span>}
+                        {pnl != null
+                          ? <span className={pnl >= 0 ? "text-emerald-400" : "text-red-400"}>{pnl >= 0 ? "+" : ""}{usd(pnl)}</span>
+                          : <span className="text-zinc-600">—</span>}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-2 justify-end">
-                          <button
-                            onClick={() => openEdit(row)}
-                            className="text-zinc-500 hover:text-white transition"
-                            title="Edit"
-                          >
+                          <button onClick={() => openEdit(row)} className="text-zinc-500 hover:text-white transition" title="Edit">
                             <PencilIcon />
                           </button>
-                          <button
-                            onClick={() => setDeleteId(row.id)}
-                            className="text-zinc-500 hover:text-red-400 transition"
-                            title="Delete"
-                          >
+                          <button onClick={() => setDeleteId(row.id)} className="text-zinc-500 hover:text-red-400 transition" title="Delete">
                             <TrashIcon />
                           </button>
                         </div>
@@ -297,121 +264,51 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-sm">
             <h2 className="text-white font-bold text-lg mb-5">Edit Transaction</h2>
-
             <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
               <div>
                 <label className="text-zinc-400 text-xs mb-1 block">Ticker</label>
-                <input
-                  name="ticker"
-                  value={editForm.ticker}
-                  onChange={handleEditChange}
-                  onBlur={handleEditTickerBlur}
-                  required
-                  maxLength={10}
-                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600"
-                />
+                <input name="ticker" value={editForm.ticker} onChange={handleEditChange} onBlur={handleEditTickerBlur} required maxLength={10}
+                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600" />
               </div>
-
               <div>
                 <label className="text-zinc-400 text-xs mb-1 block">Type</label>
-                <select
-                  name="type"
-                  value={editForm.type}
-                  onChange={handleEditChange}
-                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600"
-                >
+                <select name="type" value={editForm.type} onChange={handleEditChange}
+                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600">
                   <option value="BUY">BUY</option>
                   <option value="SELL">SELL</option>
                 </select>
               </div>
-
               <div>
                 <label className="text-zinc-400 text-xs mb-1 block">Quantity</label>
-                <input
-                  name="quantity"
-                  type="number"
-                  value={editForm.quantity}
-                  onChange={handleEditChange}
-                  required
-                  min="0.000001"
-                  step="any"
-                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600"
-                />
+                <input name="quantity" type="number" value={editForm.quantity} onChange={handleEditChange} required min="0.000001" step="any"
+                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600" />
               </div>
-
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-zinc-400 text-xs">Price (USD)</label>
-                  {editQuoteLoading && (
-                    <span className="text-zinc-500 text-xs">fetching...</span>
-                  )}
+                  {editQuoteLoading && <span className="text-zinc-500 text-xs">fetching...</span>}
                   {!editQuoteLoading && editCurrentQuote !== null && (
                     <span className="text-zinc-400 text-xs flex items-center gap-1">
                       current: {usd(editCurrentQuote)}
-                      <button
-                        type="button"
-                        onClick={() => setEditForm((p) => p ? ({ ...p, price: String(editCurrentQuote) }) : p)}
-                        className="text-indigo-400 hover:text-indigo-300 font-medium transition"
-                      >
-                        use
-                      </button>
+                      <button type="button" onClick={() => setEditForm((p) => p ? ({ ...p, price: String(editCurrentQuote) }) : p)}
+                        className="text-indigo-400 hover:text-indigo-300 font-medium transition">use</button>
                     </span>
                   )}
                 </div>
-                <input
-                  name="price"
-                  type="number"
-                  value={editForm.price}
-                  onChange={handleEditChange}
-                  required
-                  min="0.000001"
-                  step="any"
-                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600"
-                />
+                <input name="price" type="number" value={editForm.price} onChange={handleEditChange} required min="0.000001" step="any"
+                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600" />
               </div>
-
               <div>
                 <label className="text-zinc-400 text-xs mb-1 block">Date</label>
-                <input
-                  name="date"
-                  type="date"
-                  value={editForm.date}
-                  onChange={handleEditChange}
-                  required
-                  style={{ colorScheme: "dark" }}
-                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600"
-                />
+                <input name="date" type="date" value={editForm.date} onChange={handleEditChange} required style={{ colorScheme: "dark" }}
+                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600" />
               </div>
-
-              <div>
-                <label className="text-zinc-400 text-xs mb-1 block">
-                  Brokerage <span className="text-zinc-600">(optional)</span>
-                </label>
-                <input
-                  name="brokerage"
-                  value={editForm.brokerage}
-                  onChange={handleEditChange}
-                  maxLength={60}
-                  className="w-full bg-black border border-zinc-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-zinc-600"
-                />
-              </div>
-
               {editError && <p className="text-red-400 text-xs">{editError}</p>}
-
               <div className="flex gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={closeEdit}
-                  disabled={editLoading}
-                  className="flex-1 border border-zinc-700 text-zinc-400 text-sm py-2 rounded-lg hover:text-white hover:border-zinc-500 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={editLoading}
-                  className="flex-1 bg-white text-black text-sm font-semibold py-2 rounded-lg hover:bg-zinc-200 transition disabled:opacity-50"
-                >
+                <button type="button" onClick={closeEdit} disabled={editLoading}
+                  className="flex-1 border border-zinc-700 text-zinc-400 text-sm py-2 rounded-lg hover:text-white hover:border-zinc-500 transition">Cancel</button>
+                <button type="submit" disabled={editLoading}
+                  className="flex-1 bg-white text-black text-sm font-semibold py-2 rounded-lg hover:bg-zinc-200 transition disabled:opacity-50">
                   {editLoading ? "Saving..." : "Save"}
                 </button>
               </div>
@@ -427,18 +324,10 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
             <p className="text-white font-semibold mb-1">Delete transaction?</p>
             <p className="text-zinc-400 text-sm mb-6">This action cannot be undone.</p>
             <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteId(null)}
-                disabled={deleteLoading}
-                className="flex-1 border border-zinc-700 text-zinc-400 text-sm py-2 rounded-lg hover:text-white hover:border-zinc-500 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleteLoading}
-                className="flex-1 bg-red-600 text-white text-sm font-semibold py-2 rounded-lg hover:bg-red-500 transition disabled:opacity-50"
-              >
+              <button onClick={() => setDeleteId(null)} disabled={deleteLoading}
+                className="flex-1 border border-zinc-700 text-zinc-400 text-sm py-2 rounded-lg hover:text-white hover:border-zinc-500 transition">Cancel</button>
+              <button onClick={handleDelete} disabled={deleteLoading}
+                className="flex-1 bg-red-600 text-white text-sm font-semibold py-2 rounded-lg hover:bg-red-500 transition disabled:opacity-50">
                 {deleteLoading ? "Deleting..." : "Delete"}
               </button>
             </div>
