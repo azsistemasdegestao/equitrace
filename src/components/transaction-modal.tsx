@@ -5,11 +5,17 @@ import { useRouter } from "next/navigation";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+function usd(v: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v);
+}
+
 export default function TransactionModal() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [currentQuote, setCurrentQuote] = useState<number | null>(null);
   const [form, setForm] = useState({
     ticker: "",
     type: "BUY",
@@ -21,11 +27,27 @@ export default function TransactionModal() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
+    if (name === "ticker") setCurrentQuote(null);
     setForm((prev) => ({ ...prev, [name]: name === "ticker" ? value.toUpperCase() : value }));
+  }
+
+  async function handleTickerBlur() {
+    if (!form.ticker) return;
+    setQuoteLoading(true);
+    setCurrentQuote(null);
+    try {
+      const res = await fetch(`/api/quotes?tickers=${form.ticker}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data[form.ticker]) setCurrentQuote(data[form.ticker]);
+      }
+    } catch {}
+    finally { setQuoteLoading(false); }
   }
 
   function handleOpen() {
     setError("");
+    setCurrentQuote(null);
     setForm({ ticker: "", type: "BUY", quantity: "", price: "", date: today(), brokerage: "" });
     setOpen(true);
   }
@@ -85,6 +107,7 @@ export default function TransactionModal() {
                   name="ticker"
                   value={form.ticker}
                   onChange={handleChange}
+                  onBlur={handleTickerBlur}
                   required
                   maxLength={10}
                   placeholder="e.g. AAPL"
@@ -121,7 +144,24 @@ export default function TransactionModal() {
               </div>
 
               <div>
-                <label className="text-zinc-400 text-xs mb-1 block">Price (USD)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-zinc-400 text-xs">Price (USD)</label>
+                  {quoteLoading && (
+                    <span className="text-zinc-500 text-xs">fetching...</span>
+                  )}
+                  {!quoteLoading && currentQuote !== null && (
+                    <span className="text-zinc-400 text-xs flex items-center gap-1">
+                      current: {usd(currentQuote)}
+                      <button
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, price: String(currentQuote) }))}
+                        className="text-indigo-400 hover:text-indigo-300 font-medium transition"
+                      >
+                        use
+                      </button>
+                    </span>
+                  )}
+                </div>
                 <input
                   name="price"
                   type="number"

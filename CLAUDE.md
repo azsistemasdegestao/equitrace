@@ -43,6 +43,8 @@ Follow these steps for every implementation:
 - **Finnhub quotes**: fetched in `src/lib/finnhub.ts`, polled every 5 minutes client-side via `/api/quotes`. API key via `FINNHUB_API_KEY` env var. Free tier — avoid unnecessary calls.
 - **Recharts + SSR**: Recharts uses browser APIs that fail during SSR. Use a `mounted` state (`useState(false)` + `useEffect(() => setMounted(true), [])`) and only render charts after mount.
 - **Admin authorization**: both the page (`/dashboard/admin/page.tsx`) and every `/api/users` route check `session.user.role === "ADMIN"` — page redirects to `/dashboard`, API returns 403. Deleting a user requires manually deleting their `PortfolioHistory` and `Transaction` records first (no cascade in schema).
+- **Quote lookup in modal**: `transaction-modal.tsx` calls `/api/quotes?tickers=X` on `onBlur` of the Ticker field. Shows "current: $X.XX" hint with a "use" button that fills the Price field. Clears on ticker change or modal reopen.
+- **Transactions list with live quotes**: `transactions-client.tsx` fetches quotes for all unique tickers on mount, polls every 5 min. Adds `Current Value` (qty × current price) and `P&L` (only for BUY rows: current value − paid) columns. The server component (`transactions/page.tsx`) only fetches DB rows and passes them as props.
 - **Brokerage field**: `Transaction` has an optional `brokerage String?` column. The manual form includes an optional Brokerage input. The CSV import always sets `brokerage: null` (the `BROKERAGE` column in the file is ignored).
 - **CSV/Excel import**: `papaparse` parses CSV with `delimiter: ";"` (semicolon-separated); `xlsx` parses Excel. Expected columns: `DATA` (YYYY-MM-DD), `Type` (`buy`/`sale`, mapped to `BUY`/`SELL`), `Ticker`, `Quantity` (dot decimal), `Price (USD)` (dot decimal, comma thousands separator removed). `PRINCIPAL` and `BROKERAGE` columns are ignored. Rows missing required fields are returned in the `invalid` array with a reason string. A "Download sample file" button on the import page generates a valid sample CSV client-side via Blob URL.
 
@@ -63,6 +65,8 @@ src/
       auth/[...nextauth]/route.ts   # Auth.js handlers
       quotes/route.ts               # GET /api/quotes?tickers=AAPL,MSFT — Finnhub proxy
       transactions/route.ts         # GET + POST /api/transactions
+      transactions/
+        [id]/route.ts               # PATCH (edit) + DELETE /api/transactions/[id] — ownership verified via userId
       import/
         preview/route.ts            # POST /api/import/preview — parse CSV/Excel, return valid + invalid rows
         confirm/route.ts            # POST /api/import/confirm — bulk insert validated rows
@@ -83,7 +87,8 @@ src/
     navbar.tsx                      # Sticky nav with tab links + sign out
     portfolio-client.tsx            # Client: cards, pie chart, line chart, positions table, quote polling
     providers.tsx                   # SessionProvider wrapper
-    transaction-modal.tsx           # Client: "Add Transaction" button + modal form
+    transaction-modal.tsx           # Client: "Add Transaction" button + modal form; fetches quote onBlur of Ticker field
+    transactions-client.tsx         # Client: transactions table with quote polling; columns Paid, Current Value, P&L; edit modal + delete confirm per row
     import-client.tsx               # Client: file upload, preview table, conflict warning, confirm button
     admin-client.tsx                # Client: user table, create/delete/reset-password modals (ADMIN only)
   lib/
