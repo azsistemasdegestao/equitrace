@@ -44,6 +44,7 @@ Follow these steps for every implementation:
 - **Recharts + SSR**: Recharts uses browser APIs that fail during SSR. Use a `mounted` state (`useState(false)` + `useEffect(() => setMounted(true), [])`) and only render charts after mount.
 - **Admin authorization**: both the page (`/dashboard/admin/page.tsx`) and every `/api/users` route check `session.user.role === "ADMIN"` — page redirects to `/dashboard`, API returns 403. Deleting a user requires manually deleting their `PortfolioHistory` and `Transaction` records first (no cascade in schema).
 - **Quote lookup in modal**: `transaction-modal.tsx` calls `/api/quotes?tickers=X` on `onBlur` of the Ticker field. Shows "current: $X.XX" hint with a "use" button that fills the Price field. Clears on ticker change or modal reopen.
+- **Ticker search dropdown**: `transaction-modal.tsx` calls `GET /api/search?q=` with a 350ms debounce as the user types. Results show symbol + company name. Selecting a result fills the ticker and immediately triggers the quote fetch. `onMouseDown` (not `onClick`) is used on dropdown items to prevent the `onBlur` on the input from firing before the selection is registered. Outside click detection uses a `useRef` + `mousedown` listener on `document`.
 - **Transactions list with live quotes**: `transactions-client.tsx` fetches quotes for all unique tickers on mount, polls every 5 min. Adds `Current Value` (qty × current price) and `P&L` (only for BUY rows: current value − paid) columns. The server component (`transactions/page.tsx`) only fetches DB rows and passes them as props.
 - **Brokerage field**: `Transaction` has an optional `brokerage String?` column (DB only — no UI field). Always `null` for new transactions and imports.
 - **CSV/Excel import**: `papaparse` parses CSV with `delimiter: ";"` (semicolon-separated); `xlsx` parses Excel. Expected columns: `Date` (YYYY-MM-DD), `Type` (`buy`/`sell`, mapped to `BUY`/`SELL`), `Ticker`, `Quantity` (dot decimal), `Price (USD)` (dot decimal, comma thousands separator removed). Unknown columns are ignored. Rows missing required fields are returned in the `invalid` array with a reason string. A "Download sample file" button on the import page generates a valid sample CSV client-side via Blob URL.
@@ -71,6 +72,8 @@ src/
       import/
         preview/route.ts            # POST /api/import/preview — parse CSV/Excel, return valid + invalid rows
         confirm/route.ts            # POST /api/import/confirm — bulk insert validated rows
+      search/
+        route.ts                    # GET /api/search?q= — Finnhub symbol search, returns [{symbol, name}], filters US Common Stock only
       users/
         route.ts                    # POST /api/users — create user (ADMIN only)
         [id]/route.ts               # DELETE /api/users/[id] — delete user; PATCH — reset password (ADMIN only)
@@ -88,7 +91,7 @@ src/
     navbar.tsx                      # Sticky nav with tab links + sign out
     portfolio-client.tsx            # Client: cards, pie chart, line chart, positions table, quote polling; loading skeletons (quotesLoading); empty state with CTA links; mobile hides Quantity/Current Price columns
     providers.tsx                   # SessionProvider wrapper
-    transaction-modal.tsx           # Client: "Add Transaction" button + modal form; fetches quote onBlur of Ticker field
+    transaction-modal.tsx           # Client: "Add Transaction" button + modal form; ticker search dropdown (debounced, calls /api/search); fetches quote onBlur of Ticker field
     transactions-client.tsx         # Client: transactions table with quote polling; skeletons for Current/P&L; empty state with CTA; mobile hides Qty/Price columns; edit modal + delete confirm per row
     import-client.tsx               # Client: file upload, preview table, conflict warning, confirm button
     admin-client.tsx                # Client: user table, create/delete/reset-password modals (ADMIN only)

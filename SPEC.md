@@ -133,6 +133,7 @@ enum TransactionType {
 - Columns: Date, Ticker, Type (BUY/SELL), Quantity, Price, Total.
 - Button to add a new transaction (modal or inline form).
 - Transaction form fields: Ticker, Type, Quantity, Price (USD), Date.
+- **Ticker search**: the Ticker input has a magnifying glass icon. Typing 1+ characters triggers a debounced call to `GET /api/search?q=` (Finnhub symbol search), showing a dropdown with symbol + company name. Selecting a result fills the Ticker and auto-fetches the current quote.
 
 ### `/dashboard/import`
 - Upload CSV or Excel file.
@@ -176,6 +177,8 @@ src/
         [...nextauth]/
           route.ts
       transactions/
+        route.ts
+      search/
         route.ts
       users/
         route.ts
@@ -235,6 +238,7 @@ FINNHUB_API_KEY="..."
 | Prisma adapter | `@prisma/adapter-pg` | Required by Prisma 7 for PostgreSQL |
 | Middleware file | `proxy.ts` (not `middleware.ts`) | Next.js 16 renamed middleware to proxy |
 | Proxy export | `export async function proxy` | Next.js 16 requires this exact name |
+| Ticker search | Finnhub `/search` via `/api/search` | Prevents typos; filtered to US Common Stock (no foreign-exchange suffixes) |
 | PM calculation | Runtime from transactions | Always accurate, no denormalization |
 | Portfolio history | Lazy daily snapshot | Avoids cron jobs, no historical quotes needed |
 | Quote refresh | Polling every 5 min | Simple, fits Finnhub free tier limits |

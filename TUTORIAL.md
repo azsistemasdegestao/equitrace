@@ -26,7 +26,8 @@ This document teaches you how this application was built from scratch — step b
 18. [End-to-end tests with Playwright](#18-end-to-end-tests-with-playwright)
 19. [Editing and deleting transactions](#19-editing-and-deleting-transactions)
 20. [UX polish: skeletons, empty states, mobile](#20-ux-polish-skeletons-empty-states-mobile)
-21. [Known gotchas reference](#21-known-gotchas-reference)
+21. [Ticker search: autocomplete dropdown in the modal](#21-ticker-search-autocomplete-dropdown-in-the-modal)
+22. [Known gotchas reference](#22-known-gotchas-reference)
 
 ---
 
@@ -1321,7 +1322,256 @@ Both the portfolio positions table and the transactions table have too many colu
 
 ---
 
-## 21. Known gotchas reference
+## 21. Ticker search: autocomplete dropdown in the modal
+
+When a user opens the "New Transaction" modal and starts typing a ticker, they might mistype a symbol (`APPL` instead of `AAPL`) and not realize it until they save. The ticker search feature prevents this by showing a live dropdown of matching companies as they type.
+
+This chapter explains how that dropdown was built — from the backend API to every React concept involved.
+
+---
+
+### What the feature does
+
+1. The user types one or more characters in the **Ticker** field.
+2. After a short pause, the app calls `/api/search?q=AAPL`.
+3. Finnhub returns a list of matching companies.
+4. A dropdown appears below the input, showing the stock symbol and company name.
+5. The user clicks a result — the Ticker field is filled and the current price is fetched automatically.
+
+---
+
+### Step 1 — The backend: `/api/search/route.ts`
+
+We need a server-side route that proxies the Finnhub symbol search API. The API key lives on the server and must never be sent to the browser.
+
+```ts
+// src/app/api/search/route.ts
+import { auth } from "@/lib/auth";
+import { NextResponse } from "next/server";
+
+export async function GET(request: Request) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(request.url);
+  const q = searchParams.get("q")?.trim();
+  if (!q || q.length < 1) return NextResponse.json([]);
+
+  const apiKey = process.env.FINNHUB_API_KEY;
+  const res = await fetch(
+    `https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${apiKey}`
+  );
+  if (!res.ok) return NextResponse.json([]);
+
+  const data = await res.json();
+
+  const results = (data.result ?? [])
+    .filter((r) => r.type === "Common Stock" && !r.symbol.includes("."))
+    .slice(0, 7)
+    .map((r) => ({ symbol: r.displaySymbol, name: r.description }));
+
+  return NextResponse.json(results);
+}
+```
+
+**Key decisions:**
+
+- **`r.type === "Common Stock"`** — Finnhub returns many result types (ETFs, indices, bonds). We only want stocks.
+- **`!r.symbol.includes(".")`** — US exchange symbols have no dots. `AAPL` is Apple on NASDAQ. `AAPL.BA` is Apple on the Buenos Aires exchange. We only want US-listed symbols.
+- **`.slice(0, 7)`** — caps the results at 7. Longer dropdowns are harder to scan.
+- **`.map((r) => ({ symbol, name }))`** — the Finnhub response has many fields. We only expose what the UI needs, keeping the payload small.
+
+---
+
+### Step 2 — Debouncing: don't call the API on every keystroke
+
+If we called `/api/search` every time the user pressed a key, a word like `AAPL` would fire four requests: `A`, `AA`, `AAP`, `AAPL`. Three of those are wasted.
+
+**Debouncing** means: wait for the user to stop typing before firing the request. Specifically, we wait 350ms after the last keystroke. If another keystroke arrives before the 350ms timer expires, we reset the timer.
+
+In React, this is done with `useRef` holding a timeout ID:
+
+```tsx
+const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+function handleChange(e) {
+  const upper = e.target.value.toUpperCase();
+  setForm((prev) => ({ ...prev, ticker: upper }));
+
+  if (debounceRef.current) clearTimeout(debounceRef.current); // cancel previous timer
+
+  if (upper.length >= 1) {
+    debounceRef.current = setTimeout(() => runSearch(upper), 350); // start new timer
+  } else {
+    setSearchResults([]);
+    setSearchOpen(false);
+  }
+}
+```
+
+**Why `useRef` and not `useState` for the timer?**
+
+`useState` triggers a re-render when its value changes. Storing a timer ID in state would cause the component to re-render every time a timer is created or cancelled — which is once per keystroke. That is both unnecessary and expensive.
+
+`useRef` stores a value that persists across renders without causing any re-render when it changes. It is the right tool for "I need to remember this between renders, but I don't need the UI to update when it changes."
+
+---
+
+### Step 3 — Running the search
+
+The search function calls our API route and updates state with the results:
+
+```tsx
+async function runSearch(q: string) {
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return;
+    const data: SearchResult[] = await res.json();
+    setSearchResults(data);
+    setSearchOpen(data.length > 0);
+  } catch {}
+}
+```
+
+`setSearchOpen(data.length > 0)` opens the dropdown only if there are results. If the query matches nothing, no empty dropdown appears.
+
+---
+
+### Step 4 — The dropdown: positioning with CSS
+
+The dropdown must appear directly below the input, overlapping the rest of the form. In HTML, an element can be "pulled out" of the normal document flow and positioned relative to an ancestor using `position: absolute` and `position: relative`.
+
+```tsx
+<div ref={tickerWrapRef} className="relative">  {/* the anchor */}
+  <input ... />
+
+  {searchOpen && (
+    <ul className="absolute z-10 top-full mt-1 w-full ...">
+      {/* results */}
+    </ul>
+  )}
+</div>
+```
+
+- **`relative` on the wrapper div** — this makes the wrapper the *positioning context*. Any `absolute` child positions itself relative to this div, not to the whole page.
+- **`absolute` on the `<ul>`** — removes the list from the normal flow so it overlaps elements below it.
+- **`top-full`** — places the top edge of the dropdown at the bottom edge of the relative parent (i.e., just below the input).
+- **`mt-1`** — adds a small gap between the input and the dropdown.
+- **`w-full`** — makes the dropdown exactly as wide as the wrapper (and thus the input).
+- **`z-10`** — ensures the dropdown renders on top of the other form fields below it.
+
+---
+
+### Step 5 — Selecting a result: the `onMouseDown` trick
+
+Each result is a `<button>` inside the dropdown. When the user clicks one, two events fire in sequence:
+
+1. `mousedown` on the button
+2. `blur` on the input (because the input loses focus when the user clicks elsewhere)
+
+The problem: our input has an `onBlur` handler that calls `fetchQuote()`. If `onBlur` fires before the button's `onClick`, React processes the blur first — which might close the dropdown or cause other side effects before the click registers.
+
+The fix is to use `onMouseDown` instead of `onClick` on the dropdown buttons:
+
+```tsx
+<button
+  type="button"
+  onMouseDown={(e) => {
+    e.preventDefault(); // prevents the input from losing focus
+    selectSymbol(r.symbol);
+  }}
+>
+```
+
+`e.preventDefault()` on a `mousedown` event prevents the browser from shifting focus away from the input. This means `blur` on the input does NOT fire when the user clicks a dropdown item. The selection goes through cleanly.
+
+After `selectSymbol` is called, focus naturally moves on — but now it is deliberate, not an accident.
+
+```tsx
+function selectSymbol(symbol: string) {
+  setForm((prev) => ({ ...prev, ticker: symbol }));
+  setSearchOpen(false);
+  setSearchResults([]);
+  fetchQuote(symbol); // auto-fetch the price for the selected ticker
+}
+```
+
+---
+
+### Step 6 — Closing on outside click
+
+The dropdown should close when the user clicks anywhere outside the ticker field. This is not built into any HTML element — we have to implement it manually.
+
+The standard pattern:
+
+```tsx
+const tickerWrapRef = useRef<HTMLDivElement>(null);
+
+useEffect(() => {
+  function onOutside(e: MouseEvent) {
+    if (tickerWrapRef.current && !tickerWrapRef.current.contains(e.target as Node)) {
+      setSearchOpen(false);
+    }
+  }
+  document.addEventListener("mousedown", onOutside);
+  return () => document.removeEventListener("mousedown", onOutside);
+}, []);
+```
+
+Step by step:
+
+1. **`tickerWrapRef`** — a ref attached to the wrapper `<div>` around the input and dropdown.
+2. **`document.addEventListener("mousedown", onOutside)`** — listens to every click on the entire page.
+3. **`tickerWrapRef.current.contains(e.target)`** — checks if the clicked element is *inside* the wrapper div. If it is, the user clicked inside the input or dropdown — do nothing. If it is outside, close the dropdown.
+4. **`return () => document.removeEventListener(...)`** — the `useEffect` return value is a *cleanup function*. React calls it when the component unmounts (when the modal closes). Without this, the event listener would remain attached to `document` forever, causing a memory leak and potential errors.
+
+**Why `useEffect` with an empty dependency array `[]`?**
+
+An empty dependency array `[]` means "run this effect once, after the first render." Attaching a global event listener is a side effect that should only happen once — not on every render. The cleanup function handles removal.
+
+---
+
+### Step 7 — Escape key to close
+
+A small but important keyboard accessibility improvement:
+
+```tsx
+<input
+  onKeyDown={(e) => e.key === "Escape" && setSearchOpen(false)}
+  ...
+/>
+```
+
+Pressing Escape while the dropdown is open closes it. This is standard UX for any dropdown component and improves keyboard-only navigation.
+
+---
+
+### Full interaction flow recap
+
+```
+User types "APP"
+  → onChange fires → form.ticker = "APP"
+  → previous debounce timer cancelled
+  → new 350ms timer started
+
+350ms pass without another keystroke
+  → runSearch("APP") called
+  → GET /api/search?q=APP sent to server
+  → server calls Finnhub, filters, returns [{symbol:"AAPL", name:"APPLE INC"}, ...]
+  → setSearchResults([...]) → setSearchOpen(true)
+  → dropdown renders below the input
+
+User clicks "AAPL — APPLE INC"
+  → onMouseDown fires → e.preventDefault() blocks blur
+  → selectSymbol("AAPL") called
+  → form.ticker = "AAPL"
+  → dropdown closes
+  → fetchQuote("AAPL") called → shows "current: $213.49 [use]"
+```
+
+---
+
+## 22. Known gotchas reference
 
 Collected from real problems encountered while building this project:
 
@@ -1344,3 +1594,6 @@ Collected from real problems encountered while building this project:
 | Edit/delete API returns 403 for wrong user | Leaks that the resource exists | Return `404` for both "not found" and "not yours" — safer response |
 | Quotes never appear on screen (all `—`) | WSL2 has no internet by default — all Finnhub fetches fail silently | Run `echo "nameserver 8.8.8.8" \| sudo tee /etc/resolv.conf` in WSL, then restart the dev server |
 | Skeleton causes React hydration error | `<div>` is invalid inside `<p>` | Use `<span className="... inline-block">` for skeleton elements |
+| Ticker search dropdown closes before item click registers | `onBlur` on the input fires before `onClick` on the dropdown button | Use `onMouseDown` + `e.preventDefault()` on dropdown items — prevents focus from shifting during the click |
+| Outside-click listener leaks after modal closes | `document.addEventListener` was never removed | Always return a cleanup function from `useEffect` that calls `removeEventListener` |
+| Debounce timer causes stale-closure issues | Timer ID stored in `useState` triggers unnecessary re-renders | Store timer ID in `useRef` — persists across renders without causing them |
