@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   PieChart,
   Pie,
@@ -24,14 +25,8 @@ type Props = {
 };
 
 const PIE_COLORS = [
-  "#6366f1",
-  "#f59e0b",
-  "#10b981",
-  "#ef4444",
-  "#8b5cf6",
-  "#ec4899",
-  "#14b8a6",
-  "#f97316",
+  "#6366f1", "#f59e0b", "#10b981", "#ef4444",
+  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316",
 ];
 
 function usd(v: number) {
@@ -44,9 +39,16 @@ function yAxisTick(v: number) {
   return `$${v.toFixed(0)}`;
 }
 
+function Skeleton({ wide = false }: { wide?: boolean }) {
+  return (
+    <div className={`h-4 ${wide ? "w-20" : "w-14"} bg-zinc-800 rounded animate-pulse inline-block`} />
+  );
+}
+
 export default function PortfolioClient({ positions, initialQuotes, history }: Props) {
   const [quotes, setQuotes] = useState<Record<string, number>>(initialQuotes);
   const [mounted, setMounted] = useState(false);
+  const [quotesLoading, setQuotesLoading] = useState(positions.length > 0);
 
   useEffect(() => {
     setMounted(true);
@@ -63,6 +65,7 @@ export default function PortfolioClient({ positions, initialQuotes, history }: P
         if (!res.ok) return;
         const data: Record<string, number> = await res.json();
         setQuotes(data);
+        setQuotesLoading(false);
 
         if (!snapshotSaved) {
           const totalValue = positions.reduce(
@@ -99,6 +102,32 @@ export default function PortfolioClient({ positions, initialQuotes, history }: P
     .filter((r) => r.currentValue > 0)
     .map((r) => ({ name: r.ticker, value: r.currentValue }));
 
+  // Empty state
+  if (positions.length === 0) {
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center">
+        <p className="text-white font-semibold mb-1">No positions yet</p>
+        <p className="text-zinc-400 text-sm mb-6">
+          Add transactions manually or import a CSV file to see your portfolio.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Link
+            href="/dashboard/transactions"
+            className="bg-white text-black text-sm font-semibold px-5 py-2 rounded-lg hover:bg-zinc-200 transition"
+          >
+            + Add Transaction
+          </Link>
+          <Link
+            href="/dashboard/import"
+            className="border border-zinc-700 text-zinc-300 text-sm font-medium px-5 py-2 rounded-lg hover:text-white hover:border-zinc-500 transition"
+          >
+            Import CSV / Excel
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Summary cards */}
@@ -106,12 +135,12 @@ export default function PortfolioClient({ positions, initialQuotes, history }: P
         <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
           <p className="text-zinc-400 text-xs mb-1">Total Value</p>
           <p className="text-white text-xl font-bold">
-            {totalValue > 0 ? usd(totalValue) : "—"}
+            {quotesLoading ? <Skeleton wide /> : totalValue > 0 ? usd(totalValue) : "—"}
           </p>
         </div>
         <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
           <p className="text-zinc-400 text-xs mb-1">Assets</p>
-          <p className="text-white text-xl font-bold">{positions.length || "—"}</p>
+          <p className="text-white text-xl font-bold">{positions.length}</p>
         </div>
       </div>
 
@@ -137,11 +166,7 @@ export default function PortfolioClient({ positions, initialQuotes, history }: P
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{
-                    background: "#18181b",
-                    border: "1px solid #3f3f46",
-                    borderRadius: 8,
-                  }}
+                  contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }}
                   formatter={(v) => usd(Number(v))}
                   labelStyle={{ color: "#fff", fontSize: 12 }}
                   itemStyle={{ color: "#a1a1aa" }}
@@ -151,10 +176,7 @@ export default function PortfolioClient({ positions, initialQuotes, history }: P
             <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
               {pieData.map((d, i) => (
                 <span key={d.name} className="flex items-center gap-1 text-xs text-zinc-400">
-                  <span
-                    className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
-                  />
+                  <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
                   {d.name}
                 </span>
               ))}
@@ -168,38 +190,15 @@ export default function PortfolioClient({ positions, initialQuotes, history }: P
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={history} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fill: "#71717a", fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: string) => v.slice(5)}
-                  />
-                  <YAxis
-                    tick={{ fill: "#71717a", fontSize: 10 }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={yAxisTick}
-                    width={44}
-                  />
+                  <XAxis dataKey="date" tick={{ fill: "#71717a", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v: string) => v.slice(5)} />
+                  <YAxis tick={{ fill: "#71717a", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={yAxisTick} width={44} />
                   <Tooltip
-                    contentStyle={{
-                      background: "#18181b",
-                      border: "1px solid #3f3f46",
-                      borderRadius: 8,
-                    }}
+                    contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }}
                     formatter={(v) => [usd(Number(v)), "Value"]}
                     labelStyle={{ color: "#a1a1aa", fontSize: 11 }}
                     itemStyle={{ color: "#fff" }}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#6366f1"
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: "#6366f1" }}
-                  />
+                  <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "#6366f1" }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -212,82 +211,46 @@ export default function PortfolioClient({ positions, initialQuotes, history }: P
       )}
 
       {/* Positions table */}
-      {rows.length > 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800">
-                  <th className="text-left text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">
-                    Ticker
-                  </th>
-                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">
-                    Quantity
-                  </th>
-                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">
-                    Avg Cost
-                  </th>
-                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">
-                    Current Price
-                  </th>
-                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">
-                    Value
-                  </th>
-                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">
-                    P&L
-                  </th>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800">
+                <th className="text-left text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Ticker</th>
+                <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap hidden sm:table-cell">Quantity</th>
+                <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Avg Cost</th>
+                <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap hidden sm:table-cell">Current Price</th>
+                <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Value</th>
+                <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={row.ticker} className={`border-b border-zinc-800 last:border-0 ${i % 2 === 0 ? "" : "bg-zinc-800/20"}`}>
+                  <td className="px-4 py-3 text-white font-medium whitespace-nowrap">{row.ticker}</td>
+                  <td className="px-4 py-3 text-white text-right whitespace-nowrap hidden sm:table-cell">
+                    {row.quantity.toLocaleString("en-US", { maximumFractionDigits: 6 })}
+                  </td>
+                  <td className="px-4 py-3 text-white text-right whitespace-nowrap">{usd(row.avgCost)}</td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap hidden sm:table-cell">
+                    {quotesLoading ? <Skeleton /> : row.currentPrice > 0 ? <span className="text-white">{usd(row.currentPrice)}</span> : <span className="text-zinc-600">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {quotesLoading ? <Skeleton /> : row.currentValue > 0 ? <span className="text-white font-medium">{usd(row.currentValue)}</span> : <span className="text-zinc-600">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap font-medium">
+                    {quotesLoading ? <Skeleton /> : row.currentPrice > 0 ? (
+                      <span className={row.pnlPct >= 0 ? "text-emerald-400" : "text-red-400"}>
+                        {row.pnlPct >= 0 ? "+" : ""}{row.pnlPct.toFixed(2)}%
+                      </span>
+                    ) : <span className="text-zinc-600">—</span>}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, i) => (
-                  <tr
-                    key={row.ticker}
-                    className={`border-b border-zinc-800 last:border-0 ${
-                      i % 2 === 0 ? "" : "bg-zinc-800/20"
-                    }`}
-                  >
-                    <td className="px-4 py-3 text-white font-medium whitespace-nowrap">
-                      {row.ticker}
-                    </td>
-                    <td className="px-4 py-3 text-white text-right whitespace-nowrap">
-                      {row.quantity.toLocaleString("en-US", { maximumFractionDigits: 6 })}
-                    </td>
-                    <td className="px-4 py-3 text-white text-right whitespace-nowrap">
-                      {usd(row.avgCost)}
-                    </td>
-                    <td className="px-4 py-3 text-white text-right whitespace-nowrap">
-                      {row.currentPrice > 0 ? usd(row.currentPrice) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-white text-right whitespace-nowrap">
-                      {row.currentValue > 0 ? usd(row.currentValue) : "—"}
-                    </td>
-                    <td
-                      className={`px-4 py-3 text-right whitespace-nowrap font-medium ${
-                        row.currentPrice === 0
-                          ? "text-zinc-500"
-                          : row.pnlPct >= 0
-                          ? "text-emerald-400"
-                          : "text-red-400"
-                      }`}
-                    >
-                      {row.currentPrice > 0
-                        ? `${row.pnlPct >= 0 ? "+" : ""}${row.pnlPct.toFixed(2)}%`
-                        : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      ) : (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center">
-          <p className="text-zinc-400 text-sm">No positions yet.</p>
-          <p className="text-zinc-600 text-xs mt-1">
-            Add transactions to see your portfolio.
-          </p>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

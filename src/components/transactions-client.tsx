@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import TransactionModal from "@/components/transaction-modal";
+
+function Skeleton() {
+  return <div className="h-4 w-16 bg-zinc-800 rounded animate-pulse inline-block" />;
+}
 
 type Row = {
   id: string;
@@ -60,6 +65,7 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [quotesLoading, setQuotesLoading] = useState(initialRows.length > 0);
 
   useEffect(() => {
     if (rows.length === 0) return;
@@ -68,7 +74,10 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
     async function poll() {
       try {
         const res = await fetch(`/api/quotes?tickers=${tickers}`);
-        if (res.ok) setQuotes(await res.json());
+        if (res.ok) {
+          setQuotes(await res.json());
+          setQuotesLoading(false);
+        }
       } catch {}
     }
 
@@ -185,8 +194,22 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
 
       {rows.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center">
-          <p className="text-zinc-400 text-sm">No transactions yet.</p>
-          <p className="text-zinc-600 text-xs mt-1">Add your first transaction to get started.</p>
+          <p className="text-white font-semibold mb-1">No transactions yet</p>
+          <p className="text-zinc-400 text-sm mb-6">Add a transaction manually or import a CSV file.</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => document.querySelector<HTMLButtonElement>("[data-add-transaction]")?.click()}
+              className="bg-white text-black text-sm font-semibold px-5 py-2 rounded-lg hover:bg-zinc-200 transition"
+            >
+              + Add Transaction
+            </button>
+            <Link
+              href="/dashboard/import"
+              className="border border-zinc-700 text-zinc-300 text-sm font-medium px-5 py-2 rounded-lg hover:text-white hover:border-zinc-500 transition"
+            >
+              Import CSV / Excel
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
@@ -197,10 +220,10 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
                   <th className="text-left text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Date</th>
                   <th className="text-left text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Ticker</th>
                   <th className="text-left text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Type</th>
-                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Quantity</th>
-                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Price</th>
+                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap hidden sm:table-cell">Qty</th>
+                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap hidden sm:table-cell">Price</th>
                   <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Paid</th>
-                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Current Value</th>
+                  <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">Current</th>
                   <th className="text-right text-zinc-400 font-medium px-4 py-3 whitespace-nowrap">P&amp;L</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -225,18 +248,18 @@ export default function TransactionsClient({ rows: initialRows }: { rows: Row[] 
                           {row.type}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-white text-right whitespace-nowrap">
+                      <td className="px-4 py-3 text-white text-right whitespace-nowrap hidden sm:table-cell">
                         {row.quantity.toLocaleString("en-US")}
                       </td>
-                      <td className="px-4 py-3 text-white text-right whitespace-nowrap">{usd(row.price)}</td>
+                      <td className="px-4 py-3 text-white text-right whitespace-nowrap hidden sm:table-cell">{usd(row.price)}</td>
                       <td className="px-4 py-3 text-white text-right whitespace-nowrap font-medium">{usd(row.total)}</td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        {currentValue != null
+                        {quotesLoading ? <Skeleton /> : currentValue != null
                           ? <span className="text-white">{usd(currentValue)}</span>
                           : <span className="text-zinc-600">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap font-medium">
-                        {pnl != null
+                        {quotesLoading ? <Skeleton /> : pnl != null
                           ? <span className={pnl >= 0 ? "text-emerald-400" : "text-red-400"}>{pnl >= 0 ? "+" : ""}{usd(pnl)}</span>
                           : <span className="text-zinc-600">—</span>}
                       </td>
