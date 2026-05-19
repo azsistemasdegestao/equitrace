@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Equitrace
 
-## Getting Started
+A mobile-first web application for tracking US stock investments (NYSE/NASDAQ). Log buy/sell transactions, track average cost (PM), and visualize portfolio performance over time.
 
-First, run the development server:
+## Features
+
+- **Portfolio dashboard** — total value, allocation pie chart, historical line chart, positions table with live P&L
+- **Transactions** — add, edit, and delete BUY/SELL operations with live quote lookup
+- **CSV/Excel import** — bulk-import transactions from a semicolon-delimited file
+- **Live quotes** — Finnhub integration with 5-minute polling
+- **Admin** — user management panel (ADMIN role only)
+- **Authentication** — JWT-based login with email + password
+
+## Tech stack
+
+- [Next.js 16](https://nextjs.org) (App Router, Turbopack)
+- [Prisma 7](https://www.prisma.io) + PostgreSQL
+- [Auth.js v5](https://authjs.dev) (next-auth@beta)
+- [Tailwind CSS](https://tailwindcss.com)
+- [Recharts](https://recharts.org)
+- [Finnhub](https://finnhub.io)
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 22+
+- Docker (for PostgreSQL)
+
+### 1. Start the database
+
+```bash
+docker run --name wallet-postgres \
+  -e POSTGRES_USER=wallet \
+  -e POSTGRES_PASSWORD=wallet123 \
+  -e POSTGRES_DB=wallet_dev \
+  -p 5432:5432 \
+  -d postgres:16
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env   # or create .env manually
+```
+
+```env
+DATABASE_URL="postgresql://wallet:wallet123@localhost:5432/wallet_dev"
+AUTH_SECRET="your-secret-here"
+NEXTAUTH_SECRET="your-secret-here"
+NEXTAUTH_URL="http://localhost:3000"
+FINNHUB_API_KEY="your-finnhub-key"
+```
+
+Get a free Finnhub API key at [finnhub.io](https://finnhub.io).
+
+### 3. Install dependencies and run migrations
+
+```bash
+npm install
+npx prisma migrate dev
+tsx prisma/seed.ts     # creates admin@wallet.com / admin123
+```
+
+### 4. Start the dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Log in with `admin@wallet.com` / `admin123`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## CSV import format
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Semicolon-delimited, UTF-8:
 
-## Learn More
+```
+Date;Type;Ticker;Quantity;Price (USD)
+2022-03-09;buy;AAPL;10;165.32
+2023-01-15;buy;VNQ;5;87.74
+2023-06-20;sell;AAPL;3;185.00
+```
 
-To learn more about Next.js, take a look at the following resources:
+A sample file can be downloaded directly from the Import page.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Documentation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **[TUTORIAL.md](TUTORIAL.md)** — full walkthrough of how the app was built, every decision explained
+- **[CLAUDE.md](CLAUDE.md)** — guidance for AI-assisted development on this codebase

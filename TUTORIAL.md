@@ -950,51 +950,21 @@ Quotes are polled every 5 minutes, same as the portfolio page.
 
 ---
 
-## 15. The Brokerage field
+## 15. The Brokerage field (schema only)
 
-### Why add it?
+The `Transaction` model has a `brokerage String?` column added during development. It is **nullable and has no UI** — the Add/Edit modal does not expose it, and it is never shown in the transactions table. All new transactions and imports store `null`.
 
-Investors often use multiple brokerages (Avenue, TD Ameritrade, Interactive Brokers, etc.). Tracking which brokerage a transaction came from makes it easier to reconcile records and understand fees.
-
-### Schema change
+The column was retained in the schema to avoid a migration for existing data and in case it becomes useful in the future (e.g., tracking fees or institution per transaction).
 
 ```prisma
 model Transaction {
   ...
-  brokerage String?   // nullable — existing records are not affected
+  brokerage String?   // nullable, unused in UI
   ...
 }
 ```
 
-`String?` (nullable) is the right choice here because:
-- Existing transactions in the database do not have a brokerage — making it required would break all existing records.
-- Users who don't care about tracking brokerage should not be forced to fill it in.
-
-After editing the schema, run:
-```bash
-npx prisma migrate dev --name add-brokerage-to-transaction
-npx prisma generate
-```
-
-### Form field
-
-The "Add Transaction" modal includes an optional Brokerage text input below the Date field. The `colorScheme: "dark"` style on the date input forces the browser's native date picker to render in dark mode — without it, the calendar icon appears white on a dark background on some browsers.
-
-### API
-
-`POST /api/transactions` reads `brokerage` from the request body and saves it after trimming whitespace. If the field is empty or missing, `null` is stored — not an empty string. This keeps the data clean and makes "no brokerage" distinguishable from an empty string.
-
-```ts
-brokerage: brokerage ? String(brokerage).trim() : null,
-```
-
-### Transactions list
-
-The `/dashboard/transactions` page shows a **Brokerage** column at the right of the table. Rows without a brokerage display `—` in muted grey (`text-zinc-700`) to visually distinguish "not set" from an actual value.
-
-### Import
-
-The CSV file's `BROKERAGE` column is **ignored** — `brokerage` is always set to `null` on import. The reasoning: the brokerage column in brokerage exports represents a fee amount, not the institution name. Users who want to record the institution name should use the manual form.
+> The `colorScheme: "dark"` style on the date input forces the browser's native date picker to render in dark mode — without it, the calendar icon appears white on a dark background on some browsers.
 
 ---
 
@@ -1102,7 +1072,7 @@ await prisma.transaction.createMany({
 });
 ```
 
-`createMany` inserts all rows in a single database query, which is much faster than inserting one row at a time. `brokerage` is always `null` from the import — the `BROKERAGE` column in the file is ignored.
+`createMany` inserts all rows in a single database query, which is much faster than inserting one row at a time.
 
 ### Sample file download
 
@@ -1244,7 +1214,7 @@ export async function PATCH(request, { params }) {
 
   const updated = await prisma.transaction.update({
     where: { id: params.id },
-    data: { ticker, type, quantity, price, date, brokerage },
+    data: { ticker, type, quantity, price, date },
   });
 
   return NextResponse.json(updated);
@@ -1269,7 +1239,7 @@ In `TransactionsClient`, each row has two icon buttons in an **Actions** column 
 - **Pencil icon** → opens an Edit modal pre-filled with the row's current values
 - **Trash icon** → opens a Delete confirmation modal
 
-**Edit modal:** identical fields to the Add Transaction modal (ticker, type, quantity, price, date, brokerage), including the quote lookup (`onBlur` on ticker). The form submits to `PATCH /api/transactions/[id]`. On success, the row is updated in local state immediately — no page reload needed.
+**Edit modal:** identical fields to the Add Transaction modal (ticker, type, quantity, price, date), including the quote lookup (`onBlur` on ticker). The form submits to `PATCH /api/transactions/[id]`. On success, the row is updated in local state immediately — no page reload needed.
 
 **Delete modal:** shows "Delete transaction? This action cannot be undone." with a red Delete button. On confirm, it calls `DELETE /api/transactions/[id]` and removes the row from local state.
 

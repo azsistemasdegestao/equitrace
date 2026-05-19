@@ -39,18 +39,18 @@ Follow these steps for every implementation:
 - **Next.js 16 proxy file**: middleware is `src/proxy.ts` with `export async function proxy` — Next.js 16 deprecated `middleware.ts` in favor of `proxy.ts`. **NEVER create or use `middleware.ts`** — having both files causes conflict. Only `proxy.ts` must exist.
 - **Prisma 7 + PostgreSQL**: requires `@prisma/adapter-pg` and `PrismaPg` adapter (not the legacy direct connection). The singleton is in `src/lib/prisma.ts`.
 - **PM (average cost) calculation**: computed at runtime from full transaction history in `src/lib/portfolio.ts`. SELL reduces quantity but does not change the average cost of remaining shares.
-- **Portfolio history**: lazy daily snapshot — triggered on the first dashboard request each day, stored in `PortfolioHistory`. No cron, no historical quotes.
+- **Portfolio history**: lazy daily snapshot — triggered client-side after quotes load, via `POST /api/snapshot`. Stored in `PortfolioHistory`. No cron, no background worker.
 - **Finnhub quotes**: fetched in `src/lib/finnhub.ts`, polled every 5 minutes client-side via `/api/quotes`. API key via `FINNHUB_API_KEY` env var. Free tier — avoid unnecessary calls.
 - **Recharts + SSR**: Recharts uses browser APIs that fail during SSR. Use a `mounted` state (`useState(false)` + `useEffect(() => setMounted(true), [])`) and only render charts after mount.
 - **Admin authorization**: both the page (`/dashboard/admin/page.tsx`) and every `/api/users` route check `session.user.role === "ADMIN"` — page redirects to `/dashboard`, API returns 403. Deleting a user requires manually deleting their `PortfolioHistory` and `Transaction` records first (no cascade in schema).
 - **Quote lookup in modal**: `transaction-modal.tsx` calls `/api/quotes?tickers=X` on `onBlur` of the Ticker field. Shows "current: $X.XX" hint with a "use" button that fills the Price field. Clears on ticker change or modal reopen.
 - **Transactions list with live quotes**: `transactions-client.tsx` fetches quotes for all unique tickers on mount, polls every 5 min. Adds `Current Value` (qty × current price) and `P&L` (only for BUY rows: current value − paid) columns. The server component (`transactions/page.tsx`) only fetches DB rows and passes them as props.
-- **Brokerage field**: `Transaction` has an optional `brokerage String?` column. The manual form includes an optional Brokerage input. The CSV import always sets `brokerage: null` (the `BROKERAGE` column in the file is ignored).
+- **Brokerage field**: `Transaction` has an optional `brokerage String?` column (DB only — no UI field). Always `null` for new transactions and imports.
 - **CSV/Excel import**: `papaparse` parses CSV with `delimiter: ";"` (semicolon-separated); `xlsx` parses Excel. Expected columns: `Date` (YYYY-MM-DD), `Type` (`buy`/`sell`, mapped to `BUY`/`SELL`), `Ticker`, `Quantity` (dot decimal), `Price (USD)` (dot decimal, comma thousands separator removed). Unknown columns are ignored. Rows missing required fields are returned in the `invalid` array with a reason string. A "Download sample file" button on the import page generates a valid sample CSV client-side via Blob URL.
 
 ### Data Models
 
-Three models: `User` (with `role: ADMIN | USER`), `Transaction` (BUY/SELL per ticker with `date` required and optional `brokerage`), `PortfolioHistory` (daily total value snapshots).
+Three models: `User` (with `role: ADMIN | USER`), `Transaction` (BUY/SELL per ticker, `date` required, `brokerage String?` unused in UI), `PortfolioHistory` (daily total value snapshots).
 
 ### Rendering Strategy
 
@@ -64,6 +64,7 @@ src/
     api/
       auth/[...nextauth]/route.ts   # Auth.js handlers
       quotes/route.ts               # GET /api/quotes?tickers=AAPL,MSFT — Finnhub proxy
+      snapshot/route.ts             # POST /api/snapshot — save daily portfolio history (called client-side after quotes load)
       transactions/route.ts         # GET + POST /api/transactions
       transactions/
         [id]/route.ts               # PATCH (edit) + DELETE /api/transactions/[id] — ownership verified via userId
