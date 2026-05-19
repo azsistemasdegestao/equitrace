@@ -86,10 +86,10 @@ src/
     page.tsx                          # Root page — checks auth, redirects to /dashboard (logged in) or /login (not logged in)
   components/
     navbar.tsx                      # Sticky nav with tab links + sign out
-    portfolio-client.tsx            # Client: cards, pie chart, line chart, positions table, quote polling
+    portfolio-client.tsx            # Client: cards, pie chart, line chart, positions table, quote polling; loading skeletons (quotesLoading); empty state with CTA links; mobile hides Quantity/Current Price columns
     providers.tsx                   # SessionProvider wrapper
     transaction-modal.tsx           # Client: "Add Transaction" button + modal form; fetches quote onBlur of Ticker field
-    transactions-client.tsx         # Client: transactions table with quote polling; columns Paid, Current Value, P&L; edit modal + delete confirm per row
+    transactions-client.tsx         # Client: transactions table with quote polling; skeletons for Current/P&L; empty state with CTA; mobile hides Qty/Price columns; edit modal + delete confirm per row
     import-client.tsx               # Client: file upload, preview table, conflict warning, confirm button
     admin-client.tsx                # Client: user table, create/delete/reset-password modals (ADMIN only)
   lib/

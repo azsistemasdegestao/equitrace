@@ -25,7 +25,8 @@ This document teaches you how this application was built from scratch — step b
 17. [Admin: user management](#17-admin-user-management)
 18. [End-to-end tests with Playwright](#18-end-to-end-tests-with-playwright)
 19. [Editing and deleting transactions](#19-editing-and-deleting-transactions)
-20. [Known gotchas reference](#20-known-gotchas-reference)
+20. [UX polish: skeletons, empty states, mobile](#20-ux-polish-skeletons-empty-states-mobile)
+21. [Known gotchas reference](#21-known-gotchas-reference)
 
 ---
 
@@ -700,16 +701,21 @@ export async function getQuote(symbol: string): Promise<number | null> {
 
 ### Client-side polling — and why quotes are NOT fetched server-side
 
-The `PortfolioClient` component fetches quotes immediately on mount and then polls every 5 minutes:
+The `PortfolioClient` component fetches quotes immediately on mount and then polls every 5 minutes. A `quotesLoading` flag (initially `true` when there are positions) drives skeleton placeholders until the first response arrives:
 
 ```ts
+const [quotesLoading, setQuotesLoading] = useState(positions.length > 0);
+
 useEffect(() => {
   if (positions.length === 0) return;
   const tickers = positions.map((p) => p.ticker).join(",");
 
   async function poll() {
     const res = await fetch(`/api/quotes?tickers=${tickers}`);
-    if (res.ok) setQuotes(await res.json());
+    if (!res.ok) return;
+    const data = await res.json();
+    setQuotes(data);
+    setQuotesLoading(false); // removes skeletons on first success
   }
 
   poll(); // immediate fetch on mount
@@ -725,7 +731,7 @@ The interval is cleaned up when the component unmounts (navigating away). Withou
 It seems natural to pre-load quotes on the server so the page renders with data already visible. In practice, this is a bad idea:
 
 - Finnhub API calls take 500ms–3s each over the network.
-- With 5 tickers, the server waits for all 5 (even in parallel) before sending any HTML to the browser.
+- With many tickers (e.g., 29), the server waits for all of them in parallel before sending any HTML to the browser.
 - The user stares at a blank page for several seconds instead of seeing the portfolio instantly.
 
 The better pattern: pass `initialQuotes: {}` from the server and let the client fetch quotes right after mount. The page loads instantly. Quotes appear 1–2 seconds later. This is a much better perceived performance.
@@ -797,6 +803,7 @@ async function poll() {
   if (!res.ok) return;
   const data = await res.json();
   setQuotes(data);
+  setQuotesLoading(false);
 
   if (!snapshotSaved) {
     const totalValue = positions.reduce(
@@ -1259,7 +1266,62 @@ setRows((prev) => prev.filter((r) => r.id !== deleteId));
 
 ---
 
-## 20. Known gotchas reference
+## 20. UX polish: skeletons, empty states, mobile
+
+### Loading skeletons
+
+Quotes load asynchronously after mount. Without feedback, the user sees `—` in every cell for several seconds with no indication that data is coming. A `quotesLoading` boolean drives animated skeleton placeholders until the first quote response arrives.
+
+```tsx
+function Skeleton({ wide = false }: { wide?: boolean }) {
+  return (
+    <span className={`h-4 ${wide ? "w-20" : "w-14"} bg-zinc-800 rounded animate-pulse inline-block`} />
+  );
+}
+
+// In the cell:
+{quotesLoading ? <Skeleton /> : value > 0 ? usd(value) : "—"}
+```
+
+**Why `<span>` and not `<div>`?** Skeleton elements sit inside table cells and card paragraphs (`<p>`). HTML does not allow block elements (`<div>`) inside inline/text containers (`<p>`). Using `<span` with `inline-block` display achieves the same visual result without the invalid nesting that triggers React hydration errors.
+
+The `quotesLoading` state initializes as `true` only when there are positions (`positions.length > 0`). It becomes `false` on the first successful quote fetch. Subsequent polls update quotes silently — no skeleton is shown again.
+
+### Empty states with CTAs
+
+When a user has no transactions yet, showing only "No data" is unhelpful. The empty states in both the Portfolio and Transactions pages include actionable buttons:
+
+```tsx
+<div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center">
+  <p className="text-white font-semibold mb-1">No positions yet</p>
+  <p className="text-zinc-400 text-sm mb-6">
+    Add transactions manually or import a CSV file.
+  </p>
+  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+    <Link href="/dashboard/transactions" className="bg-white text-black ...">
+      + Add Transaction
+    </Link>
+    <Link href="/dashboard/import" className="border border-zinc-700 ...">
+      Import CSV / Excel
+    </Link>
+  </div>
+</div>
+```
+
+### Mobile-responsive tables
+
+Both the portfolio positions table and the transactions table have too many columns to display comfortably on a phone. Tailwind's responsive prefix `hidden sm:table-cell` hides lower-priority columns on small screens:
+
+| Table | Hidden on mobile | Visible on all screens |
+|---|---|---|
+| Portfolio | Quantity, Current Price | Ticker, Avg Cost, Value, P&L |
+| Transactions | Qty, Price | Date, Ticker, Type, Paid, Current, P&L, Actions |
+
+`sm:table-cell` restores the column at the `sm` breakpoint (640px+). The approach requires setting both the `<th>` and every `<td>` in that column to `hidden sm:table-cell`.
+
+---
+
+## 21. Known gotchas reference
 
 Collected from real problems encountered while building this project:
 
@@ -1280,3 +1342,5 @@ Collected from real problems encountered while building this project:
 | Quote lookup in modal fetches on every keystroke | `onChange` triggers too often | Use `onBlur` on the Ticker field — fires once when user leaves the field |
 | Snapshot not saved when quotes move to client | Server no longer has quote values | POST to `/api/snapshot` from the client after the first successful quote fetch |
 | Edit/delete API returns 403 for wrong user | Leaks that the resource exists | Return `404` for both "not found" and "not yours" — safer response |
+| Quotes never appear on screen (all `—`) | WSL2 has no internet by default — all Finnhub fetches fail silently | Run `echo "nameserver 8.8.8.8" \| sudo tee /etc/resolv.conf` in WSL, then restart the dev server |
+| Skeleton causes React hydration error | `<div>` is invalid inside `<p>` | Use `<span className="... inline-block">` for skeleton elements |
