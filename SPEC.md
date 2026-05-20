@@ -127,6 +127,11 @@ enum TransactionType {
 - Pie chart: portfolio distribution by ticker.
 - Line chart: portfolio value over time (built from `PortfolioHistory`, starts from first use).
 - Table: position per ticker with columns — Ticker, Quantity, Avg Cost, Current Price, Current Value, P&L (%).
+- **Empty state**: when the user has no positions, shows three CTAs — Add Transaction, Import CSV / Excel, and **Shuffle Portfolio**.
+  - Shuffle Portfolio opens a confirmation modal and calls `POST /api/shuffle`.
+  - Generates 4–5 random tickers (from a hardcoded pool: AAPL, MSFT, GOOGL, AMZN, TSLA, NVDA, META, JPM), 2–4 BUY transactions per ticker, and optionally 1 SELL per ticker.
+  - Also generates weekly `PortfolioHistory` snapshots for the full date range so the line chart is immediately populated.
+  - Button is hidden once the user has any positions.
 
 ### `/dashboard/transactions`
 - List of all transactions for the logged-in user, sorted by date descending.
@@ -247,6 +252,8 @@ FINNHUB_API_KEY="..."
 | Quote refresh | Polling every 5 min | Simple, fits Finnhub free tier limits |
 | CSV import | Preview before insert | User controls conflict resolution |
 | User isolation | `userId` filter on all queries | No cross-user data access |
+| Shuffle Portfolio | Hardcoded realistic price ranges per ticker | Avoids Finnhub historical API (not on free tier); keeps generation self-contained and offline-safe |
+| Shuffle history generation | Weekly snapshots with linear price interpolation + ±5% noise | Gives the line chart 2 years of realistic-looking data without storing actual market history |
 
 ---
 

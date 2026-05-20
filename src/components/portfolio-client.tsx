@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   PieChart,
@@ -46,9 +47,23 @@ function Skeleton({ wide = false }: { wide?: boolean }) {
 }
 
 export default function PortfolioClient({ positions, initialQuotes, history }: Props) {
+  const router = useRouter();
   const [quotes, setQuotes] = useState<Record<string, number>>(initialQuotes);
   const [mounted, setMounted] = useState(false);
   const [quotesLoading, setQuotesLoading] = useState(positions.length > 0);
+  const [shuffleOpen, setShuffleOpen] = useState(false);
+  const [shuffling, setShuffling] = useState(false);
+
+  async function handleShuffle() {
+    setShuffling(true);
+    try {
+      await fetch("/api/shuffle", { method: "POST" });
+      setShuffleOpen(false);
+      router.refresh();
+    } finally {
+      setShuffling(false);
+    }
+  }
 
   useEffect(() => {
     setMounted(true);
@@ -105,26 +120,61 @@ export default function PortfolioClient({ positions, initialQuotes, history }: P
   // Empty state
   if (positions.length === 0) {
     return (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center">
-        <p className="text-white font-semibold mb-1">No positions yet</p>
-        <p className="text-zinc-400 text-sm mb-6">
-          Add transactions manually or import a CSV file to see your portfolio.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link
-            href="/dashboard/transactions"
-            className="bg-white text-black text-sm font-semibold px-5 py-2 rounded-lg hover:bg-zinc-200 transition"
-          >
-            + Add Transaction
-          </Link>
-          <Link
-            href="/dashboard/import"
-            className="border border-zinc-700 text-zinc-300 text-sm font-medium px-5 py-2 rounded-lg hover:text-white hover:border-zinc-500 transition"
-          >
-            Import CSV / Excel
-          </Link>
+      <>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center">
+          <p className="text-white font-semibold mb-1">No positions yet</p>
+          <p className="text-zinc-400 text-sm mb-6">
+            Add transactions manually or import a CSV file to see your portfolio.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link
+              href="/dashboard/transactions"
+              className="bg-white text-black text-sm font-semibold px-5 py-2 rounded-lg hover:bg-zinc-200 transition"
+            >
+              + Add Transaction
+            </Link>
+            <Link
+              href="/dashboard/import"
+              className="border border-zinc-700 text-zinc-300 text-sm font-medium px-5 py-2 rounded-lg hover:text-white hover:border-zinc-500 transition"
+            >
+              Import CSV / Excel
+            </Link>
+            <button
+              onClick={() => setShuffleOpen(true)}
+              className="bg-indigo-600 text-white text-sm font-semibold px-5 py-2 rounded-lg hover:bg-indigo-500 transition"
+            >
+              Shuffle Portfolio
+            </button>
+          </div>
         </div>
-      </div>
+
+        {shuffleOpen && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-sm">
+              <h2 className="text-white font-semibold text-lg mb-2">Shuffle Portfolio</h2>
+              <p className="text-zinc-400 text-sm mb-6">
+                This will generate random buy and sell transactions for a demo portfolio. There is no undo.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShuffleOpen(false)}
+                  disabled={shuffling}
+                  className="border border-zinc-700 text-zinc-300 text-sm font-medium px-4 py-2 rounded-lg hover:text-white hover:border-zinc-500 transition disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleShuffle}
+                  disabled={shuffling}
+                  className="bg-indigo-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-indigo-500 transition disabled:opacity-50"
+                >
+                  {shuffling ? "Generating..." : "Shuffle"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 

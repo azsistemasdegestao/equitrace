@@ -8,6 +8,7 @@ A mobile-first web application for tracking US stock investments (NYSE/NASDAQ). 
 - **Transactions** — add, edit, and delete BUY/SELL operations with live quote lookup and ticker search autocomplete
 - **CSV/Excel import** — bulk-import transactions from a semicolon-delimited file
 - **Live quotes** — Finnhub integration with 5-minute polling
+- **Shuffle Portfolio** — one-click demo portfolio generator (visible only on empty portfolio); seeds realistic transactions and 2 years of portfolio history
 - **Admin** — user management panel (ADMIN role only)
 - **Authentication** — JWT-based login with email + password
 - **Change password** — users can update their own password via a modal (gear icon in the navbar)

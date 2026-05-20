@@ -48,6 +48,7 @@ Follow these steps for every implementation:
 - **Auto-refresh after mutations**: all transaction API routes (POST, PATCH, DELETE) call `revalidatePath('/dashboard')` and `revalidatePath('/dashboard/transactions')` to invalidate the Next.js router cache. `TransactionsClient` also uses `useEffect(() => setRows(initialRows), [initialRows])` to sync local state when the server re-renders after `router.refresh()`.
 - **Change password modal**: `change-password-modal.tsx` renders the gear icon (⚙) in the navbar. Clicking opens a modal (same pattern as transaction modal). Calls `PATCH /api/profile` which verifies the current password via `bcrypt.compare` before hashing and saving the new one. No admin required — any authenticated user can change their own password.
 - **Transactions list with live quotes**: `transactions-client.tsx` fetches quotes for all unique tickers on mount, polls every 5 min. Adds `Current Value` (qty × current price) and `P&L` (only for BUY rows: current value − paid) columns. The server component (`transactions/page.tsx`) only fetches DB rows and passes them as props.
+- **Shuffle Portfolio button**: visible only in the portfolio empty state (`positions.length === 0`). Opens a confirmation modal, then calls `POST /api/shuffle`. The route picks 4–5 random tickers from a hardcoded pool (AAPL, MSFT, GOOGL, AMZN, TSLA, NVDA, META, JPM), generates 2–4 BUY transactions per ticker with realistic hardcoded price ranges, and a 50% chance of 1 SELL per ticker (date always after earliest BUY, qty never exceeds half of total bought). Also generates weekly `PortfolioHistory` snapshots from the earliest transaction date to today — each ticker's simulated price is linearly interpolated from a random start (lower half of range) to a random end (upper half), with ±5% noise, giving a naturally trending line chart. Uses `prisma.transaction.createMany` and `prisma.portfolioHistory.createMany` for bulk insert. After success, calls `router.refresh()` to reload the server component.
 - **Brokerage field**: `Transaction` has an optional `brokerage String?` column (DB only — no UI field). Always `null` for new transactions and imports.
 - **CSV/Excel import**: `papaparse` parses CSV with `delimiter: ";"` (semicolon-separated); `xlsx` parses Excel. Expected columns: `Date` (YYYY-MM-DD), `Type` (`buy`/`sell`, mapped to `BUY`/`SELL`), `Ticker`, `Quantity` (dot decimal), `Price (USD)` (dot decimal, comma thousands separator removed). Unknown columns are ignored. Rows missing required fields are returned in the `invalid` array with a reason string. A "Download sample file" button on the import page generates a valid sample CSV client-side via Blob URL.
 
@@ -78,6 +79,8 @@ src/
         route.ts                    # GET /api/search?q= — Finnhub symbol search, returns [{symbol, name}], filters US Common Stock only
       profile/
         route.ts                    # PATCH /api/profile — user changes own password; verifies current password via bcrypt before updating
+      shuffle/
+        route.ts                    # POST /api/shuffle — generates 4–5 random BUY/SELL transactions from a hardcoded ticker pool and bulk-inserts them; only useful when user has no positions
       users/
         route.ts                    # POST /api/users — create user (ADMIN only)
         [id]/route.ts               # DELETE /api/users/[id] — delete user; PATCH — reset password (ADMIN only)
@@ -93,7 +96,7 @@ src/
     page.tsx                          # Root page — checks auth, redirects to /dashboard (logged in) or /login (not logged in)
   components/
     navbar.tsx                      # Sticky nav with tab links + sign out
-    portfolio-client.tsx            # Client: cards, pie chart, line chart, positions table, quote polling; loading skeletons (quotesLoading); empty state with CTA links; mobile hides Quantity/Current Price columns
+    portfolio-client.tsx            # Client: cards, pie chart, line chart, positions table, quote polling; loading skeletons (quotesLoading); empty state with CTA links + "Shuffle Portfolio" button (visible only when positions.length === 0); mobile hides Quantity/Current Price columns
     providers.tsx                   # SessionProvider wrapper
     transaction-modal.tsx           # Client: "Add Transaction" button + modal form; ticker search dropdown (debounced, calls /api/search); fetches quote onBlur of Ticker field
     transactions-client.tsx         # Client: transactions table with quote polling; skeletons for Current/P&L; empty state with CTA; mobile hides Qty/Price columns; edit modal + delete confirm per row; syncs rows from initialRows via useEffect on prop change

@@ -1758,3 +1758,33 @@ Collected from real problems encountered while building this project:
 | Adding a transaction doesn't update the list | `useState(initialRows)` only initializes once — new props don't sync | Add `useEffect(() => setRows(initialRows), [initialRows])` to sync on prop change |
 | Dashboard shows stale data after mutation on another page | Next.js Router Cache serves old RSC payload on navigation | Call `revalidatePath('/dashboard')` in API route handlers after mutations |
 | Change password: someone with an open session changes password silently | No current password required | Always verify current password with `bcrypt.compare` before updating |
+
+
+## 25. Shuffle Portfolio
+
+### What was built
+
+A **"Shuffle Portfolio"** button in the portfolio empty state that generates a realistic demo portfolio with one click.
+
+### How it works
+
+1. Button is visible only when `positions.length === 0` (empty state in `portfolio-client.tsx`).
+2. Clicking opens a confirmation modal warning that there is no undo.
+3. Confirming calls `POST /api/shuffle`:
+   - Picks 4–5 random tickers from a hardcoded pool: `AAPL, MSFT, GOOGL, AMZN, TSLA, NVDA, META, JPM`.
+   - For each ticker, generates 2–4 BUY transactions over the last 2 years with prices in a hardcoded realistic range per ticker.
+   - 50% chance of 1 SELL per ticker — date always after the earliest BUY, quantity never exceeds half of total bought.
+   - Generates weekly `PortfolioHistory` snapshots from the earliest transaction date to today (~104 points). Each ticker has a random start price (lower half of its range) trending to a random end price (upper half), linearly interpolated per week with ±5% noise. Total value at each week = sum of current holdings × simulated price.
+   - Bulk-inserts transactions with `prisma.transaction.createMany` and history with `prisma.portfolioHistory.createMany`.
+   - Calls `revalidatePath('/dashboard')` and `revalidatePath('/dashboard/transactions')`.
+4. Client calls `router.refresh()` after success — the server component re-renders, `positions` is now non-empty, and the empty state (and the button) disappear. The line chart is immediately populated with ~2 years of history.
+
+### Key files
+
+- `src/app/api/shuffle/route.ts` — transaction + history generation and bulk insert logic
+- `src/components/portfolio-client.tsx` — button and confirmation modal in the empty state block
+
+### Gotchas
+
+- The SELL's date is generated with `randDate(earliestBuyTime + 24h, now)`. Without the `+ 24h` guard, the SELL could land on the exact same millisecond as the BUY, which is technically valid but looks odd in the UI.
+- History snapshots are only inserted for weeks where `totalValue > 0`, so the chart always starts at a meaningful first point rather than zero.
