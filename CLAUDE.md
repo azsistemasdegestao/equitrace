@@ -16,6 +16,15 @@ npx prisma migrate dev        # run migrations
 npx prisma migrate dev --name <name>  # create + run a new migration
 npx prisma studio             # GUI for the database
 tsx prisma/seed.ts            # seed admin user (admin@wallet.com / admin123)
+
+# Docker (production stack)
+cp .env.docker.example .env.docker          # configure once
+docker compose build                        # build all images
+docker compose up -d                        # db + migrate (runs once) + app
+docker compose --profile tools run --rm seed  # seed admin user (first time only)
+docker compose logs -f app                  # view app logs
+docker compose down                         # stop containers (preserves data)
+docker compose down -v                      # stop + wipe DB volume
 ```
 
 ## Development Workflow
@@ -51,6 +60,7 @@ Follow these steps for every implementation:
 - **Shuffle Portfolio button**: visible only in the portfolio empty state (`positions.length === 0`). Opens a confirmation modal, then calls `POST /api/shuffle`. The route picks 4–5 random tickers from a hardcoded pool (AAPL, MSFT, GOOGL, AMZN, TSLA, NVDA, META, JPM), generates 2–4 BUY transactions per ticker with realistic hardcoded price ranges, and a 50% chance of 1 SELL per ticker (date always after earliest BUY, qty never exceeds half of total bought). Also generates weekly `PortfolioHistory` snapshots from the earliest transaction date to today — each ticker's simulated price is linearly interpolated from a random start (lower half of range) to a random end (upper half), with ±5% noise, giving a naturally trending line chart. Uses `prisma.transaction.createMany` and `prisma.portfolioHistory.createMany` for bulk insert. After success, calls `router.refresh()` to reload the server component.
 - **Brokerage field**: `Transaction` has an optional `brokerage String?` column (DB only — no UI field). Always `null` for new transactions and imports.
 - **CSV/Excel import**: `papaparse` parses CSV with `delimiter: ";"` (semicolon-separated); `xlsx` parses Excel. Expected columns: `Date` (YYYY-MM-DD), `Type` (`buy`/`sell`, mapped to `BUY`/`SELL`), `Ticker`, `Quantity` (dot decimal), `Price (USD)` (dot decimal, comma thousands separator removed). Unknown columns are ignored. Rows missing required fields are returned in the `invalid` array with a reason string. A "Download sample file" button on the import page generates a valid sample CSV client-side via Blob URL.
+- **Docker**: multi-stage Dockerfile (deps → builder → runner) with `output: 'standalone'` in `next.config.ts`. Runner copies only `.next/standalone`, `.next/static`, and `public` — no Prisma CLI needed. Migrations run via a separate `migrate` service (docker-compose) that uses the `builder` stage (full node_modules + prisma CLI) and exits with code 0; `app` service depends on `migrate` with `service_completed_successfully`. `seed` service also uses `builder` stage (has `tsx`), runs under the `tools` profile. The `db` service does not expose a host port (avoids conflict with dev postgres on 5432). Dev workflow (`npm run dev` + `.env`) is unaffected. Use `.env.docker` (gitignored) with `DATABASE_URL` pointing to `db` hostname for docker-compose runs. **`AUTH_TRUST_HOST=true` is required in `.env.docker`** — Auth.js v5 in production mode rejects requests from untrusted hosts without it. Prisma CLI cannot be transplanted to the runner because `@prisma/config` depends on `effect` (a top-level package not under `@prisma/`); the separate `migrate` service solves this. Builder stage sets dummy `DATABASE_URL` env var because `prisma.config.ts` calls `env("DATABASE_URL")` at load time even during `prisma generate`.
 
 ### Data Models
 
@@ -126,6 +136,10 @@ tests/
   fixtures/
     sample.csv           # 3-row test CSV for import tests
 .env
+Dockerfile                # multi-stage: deps → builder → runner (standalone output)
+docker-compose.yml        # services: db + migrate (builder target) + app + seed (profile: tools)
+.dockerignore
+.env.docker.example       # template commitável; .env.docker (real) é gitignored
 ```
 
 ## Styling Rules

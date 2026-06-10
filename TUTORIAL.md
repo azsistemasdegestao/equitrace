@@ -1787,4 +1787,66 @@ A **"Shuffle Portfolio"** button in the portfolio empty state that generates a r
 ### Gotchas
 
 - The SELL's date is generated with `randDate(earliestBuyTime + 24h, now)`. Without the `+ 24h` guard, the SELL could land on the exact same millisecond as the BUY, which is technically valid but looks odd in the UI.
+
+## 26. Docker
+
+### What was built
+
+A complete Docker setup that containerizes the app for production. The stack (Next.js app + PostgreSQL) runs via a single `docker compose up -d`. Dev workflow (`npm run dev`) is unchanged.
+
+### Key files
+
+- `Dockerfile` — 3-stage build: `deps` (npm ci), `builder` (prisma generate + next build), `runner` (standalone output only)
+- `docker-compose.yml` — 4 services: `db` (postgres:17-alpine), `migrate` (builder target, runs once), `app` (runner), `seed` (profile: tools)
+- `.dockerignore` — excludes node_modules, .next, .env*, tests, docs
+- `.env.docker.example` — committed template; real `.env.docker` is gitignored
+
+### How it works
+
+**Multi-stage Dockerfile + standalone output**
+
+`next.config.ts` sets `output: 'standalone'`, which tells Next.js to trace all dependencies and copy only the required node_modules into `.next/standalone/`. The final `runner` image is ~60% smaller than a naive copy of all node_modules, and contains only:
+- `.next/standalone/` — the traced app (includes pg, @prisma/adapter-pg, etc.)
+- `.next/static/` — bundled JS/CSS
+- `public/` — static assets
+
+The Prisma CLI is **not** in the runner — it has a deep dependency chain (notably `effect`, `@prisma/config`, schema-engine binary) that is difficult to surgically transplant without copying the entire `node_modules`. Putting the CLI in the runner was attempted and abandoned.
+
+**Separate `migrate` service**
+
+Instead of running migrations in the runner's entrypoint, a dedicated `migrate` service uses `target: builder` (the full builder stage with all node_modules) and runs:
+
+```sh
+node node_modules/.bin/prisma migrate deploy
+```
+
+Then exits. The `app` service depends on it with `condition: service_completed_successfully`. This means:
+- On `docker compose up`: migrate runs first, exits 0, then app starts
+- `migrate deploy` is idempotent — safe to re-run on every `up`
+- The runner stays lean with zero CLI dependencies
+
+**Two modes coexist**
+
+| Mode | Command | DATABASE_URL |
+|---|---|---|
+| Dev | `npm run dev` | `localhost:5432` (existing postgres container) |
+| Docker | `docker compose up -d` | `db:5432` (docker-compose internal network) |
+
+The `db` service in docker-compose does **not** expose a host port — avoiding conflict with the dev postgres already on 5432.
+
+**Seeding**
+
+The `seed` service uses `target: builder` (has full devDeps + tsx) and runs under the `tools` profile:
+
+```bash
+docker compose --profile tools run --rm seed
+```
+
+### Gotchas
+
+- **Prisma CLI não pertence ao runner**: tentar copiar `node_modules/prisma` + `node_modules/@prisma` do builder para o runner falha em runtime com `Cannot find module 'effect'` — `@prisma/config` depende do pacote `effect` (top-level dep não coberta pela cópia). A solução adotada foi o serviço `migrate` separado com `target: builder`.
+- **Builder precisa de `DATABASE_URL` dummy**: `prisma.config.ts` chama `env("DATABASE_URL")` no load time — mesmo para `prisma generate` (que não conecta ao banco). O Dockerfile seta `ENV DATABASE_URL=postgresql://dummy:...` no builder stage para contornar isso.
+- **`AUTH_TRUST_HOST=true` obrigatório em Docker**: Auth.js v5 em `NODE_ENV=production` valida o header `Host` da requisição. Em Docker ou atrás de proxy, o host pode não bater com o esperado. Sem esta variável, todas as chamadas a `/api/auth/session` retornam `UntrustedHost` e a página quebra com erro 500. Deve estar em `.env.docker`.
+- **JWT antigo do dev server causa FK violation**: o `AUTH_SECRET` é o mesmo no dev e no Docker, então um cookie de sessão do dev server ainda é considerado válido no Docker — mas o `userId` embutido no JWT aponta para o ID do usuário na base dev, que não existe na base Docker. Sintoma: `ForeignKeyConstraintViolation` em qualquer operação que usa `session.user.id`. Solução: fazer logout e entrar novamente depois de trocar de ambiente.
+- **`NEXTAUTH_URL` em produção**: deve ser o endereço real do servidor (IP ou domínio + porta) no `.env.docker`, caso contrário callbacks e redirects do Auth.js falham.
 - History snapshots are only inserted for weeks where `totalValue > 0`, so the chart always starts at a meaningful first point rather than zero.

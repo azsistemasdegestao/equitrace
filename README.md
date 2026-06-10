@@ -24,12 +24,36 @@ A mobile-first web application for tracking US stock investments (NYSE/NASDAQ). 
 
 ## Getting started
 
-### Prerequisites
+### Option A — Docker (full stack, recommended)
 
-- Node.js 22+
-- Docker (for PostgreSQL)
+Runs the app + PostgreSQL in containers. No Node.js installation required.
 
-### 1. Start the database
+**Prerequisites:** Docker + Docker Compose
+
+```bash
+# 1. Configure environment
+cp .env.docker.example .env.docker
+# Edit .env.docker: set FINNHUB_API_KEY and strong AUTH_SECRET values
+
+# 2. Build and start
+docker compose build
+docker compose up -d
+
+# 3. Seed the admin user (first time only)
+docker compose --profile tools run --rm seed
+```
+
+Open [http://localhost:3000](http://localhost:3000). Log in with `admin@wallet.com` / `admin123`.
+
+> **Note:** `.env.docker` must contain `AUTH_TRUST_HOST=true` (already present in the example file) — required by Auth.js v5 when running in Docker.
+
+---
+
+### Option B — Local dev
+
+**Prerequisites:** Node.js 22+, Docker (for PostgreSQL only)
+
+#### 1. Start the database
 
 ```bash
 docker run --name wallet-postgres \
@@ -37,14 +61,12 @@ docker run --name wallet-postgres \
   -e POSTGRES_PASSWORD=wallet123 \
   -e POSTGRES_DB=wallet_dev \
   -p 5432:5432 \
-  -d postgres:16
+  -d postgres:17-alpine
 ```
 
-### 2. Configure environment
+#### 2. Configure environment
 
-```bash
-cp .env.example .env   # or create .env manually
-```
+Create a `.env` file:
 
 ```env
 DATABASE_URL="postgresql://wallet:wallet123@localhost:5432/wallet_dev"
@@ -56,7 +78,7 @@ FINNHUB_API_KEY="your-finnhub-key"
 
 Get a free Finnhub API key at [finnhub.io](https://finnhub.io).
 
-### 3. Install dependencies and run migrations
+#### 3. Install dependencies and run migrations
 
 ```bash
 npm install
@@ -64,7 +86,7 @@ npx prisma migrate dev
 tsx prisma/seed.ts     # creates admin@wallet.com / admin123
 ```
 
-### 4. Start the dev server
+#### 4. Start the dev server
 
 ```bash
 npm run dev

@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: equitrace_db
+    restart: unless-stopped
+    env_file: .env.docker
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # $$ vira $ em runtime (avalia no container onde POSTGRES_* estão disponíveis via env_file)
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    # Porta não exposta para o host — evita conflito com o postgres de dev (localhost:5432)
+    # Para acesso direto ao banco, adicione temporariamente: ports: ["5433:5432"]
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    env_file: .env.docker
+    command: sh -c "node node_modules/.bin/prisma migrate deploy"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build: .
+    container_name: equitrace_app
+    restart: unless-stopped
+    env_file: .env.docker
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    env_file: .env.docker
+    command: sh -c "node node_modules/.bin/tsx prisma/seed.ts"
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - tools
+
+volumes:
+  pgdata:
